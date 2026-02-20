@@ -9,33 +9,30 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 
 # Quick-start development settings - unsuitable for production
-# SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = 'django-insecure-w9k*ls+_)s140fy-!w_^+2(7zg(v@694tii5grw$msk*^1lx=&'
 
-# SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['localhost', '127.0.0.1']
 
 
 # Application definition
 INSTALLED_APPS = [
-    # Django default apps
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    
-    'corsheaders',    # ✅ Virgule ici
-    'rest_framework', # ✅ Virgule ici aussi
+
+    'corsheaders',
+    'rest_framework',
     'accounts',
 ]
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
-    'corsheaders.middleware.CorsMiddleware',  # Doit être placé ici, après SecurityMiddleware
+    'corsheaders.middleware.CorsMiddleware',   # ✅ Doit être le plus haut possible
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -64,8 +61,7 @@ TEMPLATES = [
 WSGI_APPLICATION = 'crm_backend.wsgi.application'
 
 
-# Database
-# https://docs.djangoproject.com/en/6.0/ref/settings/#databases
+# Database - MySQL
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.mysql',
@@ -87,46 +83,30 @@ AUTH_USER_MODEL = 'accounts.User'
 
 
 # Password validation
-# https://docs.djangoproject.com/en/6.0/ref/settings/#auth-password-validators
 AUTH_PASSWORD_VALIDATORS = [
-    {
-        'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
-    },
-    {
-        'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',
-    },
-    {
-        'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator',
-    },
-    {
-        'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
-    },
+    {'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator'},
+    {'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator'},
+    {'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator'},
+    {'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator'},
 ]
 
 
 # Internationalization
-# https://docs.djangoproject.com/en/6.0/topics/i18n/
 LANGUAGE_CODE = 'fr-fr'
-TIME_ZONE = 'Africa/Tunis'  # 🇹🇳 Fuseau horaire de la Tunisie
+TIME_ZONE = 'Africa/Tunis'
 USE_I18N = True
 USE_TZ = True
 
 
-# Static files (CSS, JavaScript, Images)
-# https://docs.djangoproject.com/en/6.0/howto/static-files/
+# Static & Media files
 STATIC_URL = 'static/'
-
-# Media files (Uploaded files)
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
-
-# Default primary key field type
-# https://docs.djangoproject.com/en/6.0/ref/settings/#default-auto-field
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 
-# CORS Configuration
+# ✅ CORS Configuration - autorise React à communiquer avec Django
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "http://localhost:5173",
@@ -134,13 +114,44 @@ CORS_ALLOWED_ORIGINS = [
     "http://127.0.0.1:5173",
 ]
 
-CORS_ALLOW_CREDENTIALS = True
+CORS_ALLOW_CREDENTIALS = True  # ✅ Indispensable pour envoyer les cookies de session
+
+CORS_ALLOW_HEADERS = [
+    'accept',
+    'accept-encoding',
+    'authorization',
+    'content-type',
+    'dnt',
+    'origin',
+    'user-agent',
+    'x-csrftoken',    # ✅ Permet à axios d'envoyer le token CSRF
+    'x-requested-with',
+]
 
 
-# REST Framework Configuration
+# ✅ Session Configuration - stocke la session en base de données
+SESSION_ENGINE = 'django.contrib.sessions.backends.db'
+SESSION_COOKIE_AGE = 86400          # Durée de vie : 24 heures (en secondes)
+SESSION_COOKIE_HTTPONLY = True       # Sécurité : cookie non accessible en JS
+SESSION_COOKIE_SAMESITE = 'Lax'     # ✅ Nécessaire pour le cross-origin avec React
+SESSION_SAVE_EVERY_REQUEST = True    # Renouvelle la session à chaque requête
+
+
+# ✅ CSRF Configuration
+CSRF_COOKIE_HTTPONLY = False         # ✅ Doit être False pour qu'axios puisse le lire
+CSRF_COOKIE_SAMESITE = 'Lax'        # ✅ Même site que la session
+CSRF_TRUSTED_ORIGINS = [
+    "http://localhost:3000",
+    "http://localhost:5173",
+    "http://127.0.0.1:3000",
+    "http://127.0.0.1:5173",
+]
+
+
+# ✅ REST Framework Configuration
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
-        'rest_framework.authentication.SessionAuthentication',
+        'rest_framework.authentication.SessionAuthentication',  # ✅ Auth par session/cookie
     ],
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.IsAuthenticated',
@@ -151,5 +162,5 @@ REST_FRAMEWORK = {
 }
 
 
-# Email Configuration (for development)
+# Email (mode développement : affiche dans le terminal)
 EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'

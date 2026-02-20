@@ -1,6 +1,8 @@
 from django.contrib.auth.models import AbstractUser
 from django.db import models
 
+
+
 class User(AbstractUser):
     ROLE_CHOICES = (
         ('super_admin', 'Super Administrateur'),
@@ -38,3 +40,29 @@ class User(AbstractUser):
     
     class Meta:
         db_table = 'users'
+
+
+
+class PasswordResetCode(models.Model):
+    """Modèle pour stocker les codes de réinitialisation de mot de passe"""
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='password_reset_codes')
+    code = models.CharField(max_length=6)
+    email = models.EmailField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    is_used = models.BooleanField(default=False)
+    
+    def is_valid(self):
+        """Vérifie si le code est valide (moins de 10 minutes et non utilisé)"""
+        expiry_time = self.created_at + timedelta(minutes=10)
+        return not self.is_used and timezone.now() <= expiry_time
+    
+    @staticmethod
+    def generate_code():
+        """Génère un code aléatoire à 6 chiffres"""
+        return ''.join(random.choices(string.digits, k=6))
+    
+    def __str__(self):
+        return f"Code pour {self.email} - {self.code}"
+    
+    class Meta:
+        db_table = 'password_reset_codes'
