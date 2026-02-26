@@ -409,3 +409,59 @@ def reset_password(request):
 
     except PasswordResetCode.DoesNotExist:
         return Response({'success': False, 'error': 'Code invalide. Recommencez la procédure.'}, status=400)
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_user_detail(request, user_id):
+    """
+    Retourne les informations complètes d'un utilisateur pour la page DetailsCompte.
+    Accessible à tous les utilisateurs authentifiés (lecture seule).
+    Les actions (toggle/delete) restent réservées au super_admin.
+    """
+    if not is_super_admin(request.user):
+        return Response(
+            {'success': False, 'message': 'Accès refusé. Réservé au Super Administrateur.'},
+            status=status.HTTP_403_FORBIDDEN
+        )
+
+    try:
+        user = User.objects.get(id=user_id)
+    except User.DoesNotExist:
+        return Response(
+            {'success': False, 'message': 'Utilisateur introuvable.'},
+            status=status.HTTP_404_NOT_FOUND
+        )
+
+    full_name = f"{user.first_name} {user.last_name}".strip() or user.username
+    initiales = (
+        (user.first_name[0] + user.last_name[0]).upper()
+        if user.first_name and user.last_name
+        else user.username[:2].upper()
+    )
+
+    # Formatage des dates
+    def fmt_date(dt):
+        if not dt:
+            return None
+        return dt.strftime('%d/%m/%Y à %H:%M')
+
+    return Response({
+        'success':    True,
+        'can_manage': is_super_admin(request.user),
+        'user': {
+            'id':                   user.id,
+            'code':                 f'#USR-{str(user.id).zfill(3)}',
+            'nom':                  full_name,
+            'initiales':            initiales,
+            'email':                user.email,
+            'telephone':            user.phone or None,
+            'role':                 user.role,
+            'is_active':            user.is_active,
+            'statut':               'Actif' if user.is_active else 'Inactif',
+            'dateCreation':         fmt_date(user.date_joined),
+            'derniereConnexion':    fmt_date(user.last_login),
+            # last_modified n'existe pas par défaut dans Django,
+            # utilisez updated_at si vous avez ce champ dans votre modèle User
+            'derniereModification': None,
+        }
+    }, status=status.HTTP_200_OK)
