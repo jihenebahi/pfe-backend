@@ -53,13 +53,12 @@ class LoginSerializer(serializers.Serializer):
         
 
 # Ajoutez cette classe dans serializers.py
-
 class ChangePasswordSerializer(serializers.Serializer):
     """
     Sérializer pour le changement de mot de passe
     """
-    old_password = serializers.CharField(write_only=True, required=True)
-    new_password = serializers.CharField(write_only=True, required=True)
+    old_password     = serializers.CharField(write_only=True, required=True)
+    new_password     = serializers.CharField(write_only=True, required=True)
     confirm_password = serializers.CharField(write_only=True, required=True)
 
     def validate_old_password(self, value):
@@ -69,19 +68,42 @@ class ChangePasswordSerializer(serializers.Serializer):
         return value
 
     def validate(self, data):
-        if data['new_password'] != data['confirm_password']:
+        new_password = data['new_password']
+
+        # ✅ Vérification correspondance
+        if new_password != data['confirm_password']:
             raise serializers.ValidationError({
                 "confirm_password": "Les nouveaux mots de passe ne correspondent pas"
             })
-        
-        # Vous pouvez ajouter des validations supplémentaires pour le nouveau mot de passe
-        if len(data['new_password']) < 8:
+
+        # ✅ Vérification longueur minimale
+        if len(new_password) < 8:
             raise serializers.ValidationError({
                 "new_password": "Le mot de passe doit contenir au moins 8 caractères"
             })
-            
+
+        # ✅ Vérification majuscule
+        if not any(c.isupper() for c in new_password):
+            raise serializers.ValidationError({
+                "new_password": "Le mot de passe doit contenir au moins une lettre majuscule"
+            })
+
+        # ✅ Vérification minuscule
+        if not any(c.islower() for c in new_password):
+            raise serializers.ValidationError({
+                "new_password": "Le mot de passe doit contenir au moins une lettre minuscule"
+            })
+
+        # ✅ Vérification chiffre
+        if not any(c.isdigit() for c in new_password):
+            raise serializers.ValidationError({
+                "new_password": "Le mot de passe doit contenir au moins un chiffre"
+            })
+
         return data
+        
     
+
 
 
 
