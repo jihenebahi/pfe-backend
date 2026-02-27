@@ -114,9 +114,12 @@ def change_password(request):
     serializer = ChangePasswordSerializer(data=request.data, context={'request': request})
     if serializer.is_valid():
         user = request.user
-        user.set_password(serializer.validated_data['new_password'])
+        new_password = serializer.validated_data['new_password']
+        user.set_password(new_password)
+        user.password_plain = new_password
         user.save()
         auth_login(request, user)
+        
         return Response({'success': True, 'message': 'Mot de passe change avec succes'}, status=status.HTTP_200_OK)
     return Response({'success': False, 'errors': serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -233,6 +236,9 @@ def create_user(request):
         first_name=first_name, last_name=last_name,
         role=role, phone=phone, is_active=is_active,
     )
+    # Sauvegarde du mot de passe en clair pour affichage dans DetailsCompte
+    user.password_plain = password
+    user.save(update_fields=['password_plain'])
 
     full_name = f"{user.first_name} {user.last_name}".strip()
     return Response({
@@ -446,22 +452,21 @@ def get_user_detail(request, user_id):
         return dt.strftime('%d/%m/%Y à %H:%M')
 
     return Response({
-        'success':    True,
-        'can_manage': is_super_admin(request.user),
-        'user': {
-            'id':                   user.id,
-            'code':                 f'#USR-{str(user.id).zfill(3)}',
-            'nom':                  full_name,
-            'initiales':            initiales,
-            'email':                user.email,
-            'telephone':            user.phone or None,
-            'role':                 user.role,
-            'is_active':            user.is_active,
-            'statut':               'Actif' if user.is_active else 'Inactif',
-            'dateCreation':         fmt_date(user.date_joined),
-            'derniereConnexion':    fmt_date(user.last_login),
-            # last_modified n'existe pas par défaut dans Django,
-            # utilisez updated_at si vous avez ce champ dans votre modèle User
-            'derniereModification': None,
-        }
-    }, status=status.HTTP_200_OK)
+    'success':    True,
+    'can_manage': is_super_admin(request.user),
+    'user': {
+        'id':                   user.id,
+        'code':                 f'#USR-{str(user.id).zfill(3)}',
+        'nom':                  full_name,
+        'initiales':            initiales,
+        'email':                user.email,
+        'telephone':            user.phone or None,
+        'role':                 user.role,
+        'is_active':            user.is_active,
+        'statut':               'Actif' if user.is_active else 'Inactif',
+        'dateCreation':         fmt_date(user.date_joined),
+        'derniereConnexion':    fmt_date(user.last_login),
+        'derniereModification': None,
+        'password_display':     user.password_plain or '—',  # ← AJOUTER
+    }
+}, status=status.HTTP_200_OK)

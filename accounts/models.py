@@ -21,6 +21,8 @@ class User(AbstractUser):
     email_verified = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    # Mot de passe en clair — stocké uniquement pour affichage dans l'interface admin
+    password_plain = models.CharField(max_length=255, blank=True, null=True, verbose_name="Mot de passe (affiché)")
 
     groups = models.ManyToManyField(
         'auth.Group',
