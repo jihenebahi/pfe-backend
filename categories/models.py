@@ -12,3 +12,4 @@ class Categorie(models.Model):
 
     class Meta:
         db_table = "categorie"
+        app_label = "categories"

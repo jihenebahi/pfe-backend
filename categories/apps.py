@@ -1,5 +1,5 @@
 from django.apps import AppConfig
 
-
 class CategoriesConfig(AppConfig):
-    name = "categories"
+    default_auto_field = 'django.db.models.BigAutoField'
+    name = 'categories'   # ✅ doit être 'categories' avec s
