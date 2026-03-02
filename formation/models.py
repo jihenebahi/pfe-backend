@@ -18,7 +18,7 @@ class Formation(models.Model):
 
     # 🔥 AJOUT DE LA CATEGORIE ICI
     categorie = models.ForeignKey(
-        'categorie',   # nom_app.NomModel
+        'categories.Categorie',   # nom_app.NomModel
         on_delete=models.CASCADE,
         related_name='formations'
     )
