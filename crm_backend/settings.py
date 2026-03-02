@@ -24,7 +24,7 @@ INSTALLED_APPS = [
     'rest_framework',
     'accounts',
     'formation',
-    
+    'categories',
 
 ]
 
