@@ -10,10 +10,10 @@ class User(AbstractUser):
     ROLE_CHOICES = (
         ('super_admin', 'Super Administrateur'),
         ('responsable', 'Responsable Pédagogique'),
-        ('assistante', 'Assistante'),
-        ('entreprise', 'Entreprise Partenaire'),
-        ('formateur', 'Formateur'),
-        ('etudiant', 'Étudiant'),
+        #('assistante', 'Assistante'),
+        #('entreprise', 'Entreprise Partenaire'),
+        #('formateur', 'Formateur'),
+        #('etudiant', 'Étudiant'),
     )
 
     role = models.CharField(max_length=20, choices=ROLE_CHOICES, default='etudiant')
