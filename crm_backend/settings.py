@@ -23,11 +23,7 @@ INSTALLED_APPS = [
     'corsheaders',
     'rest_framework',
     'accounts',
-<<<<<<< HEAD
     'formation',
-=======
-    'categories',
->>>>>>> faf4d72e48b289a2c0ed079a8eec6c37709cd1ea
 ]
 
 MIDDLEWARE = [
