@@ -23,6 +23,8 @@ class Formation(models.Model):
         related_name='formations'
     )
 
+    
+
     description = models.TextField()
     objectifs_pedagogiques = models.TextField()
     prerequis = models.TextField(blank=True, null=True)

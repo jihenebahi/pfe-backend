@@ -25,6 +25,8 @@ INSTALLED_APPS = [
     'accounts',
     'formation',
     'categories',
+    'formateurs',
+
 
 ]
 
