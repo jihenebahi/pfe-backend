@@ -24,7 +24,11 @@ class Formation(models.Model):
         related_name='formations'
     )
 
-    
+    formateurs = models.ManyToManyField(
+    'formateurs.Formateur',
+    related_name='formations',
+    blank=True
+    )
 
     description = models.TextField()
     objectifs_pedagogiques = models.TextField()

@@ -17,8 +17,8 @@ class Formateur(models.Model):
         max_length=15,
         validators=[
             RegexValidator(
-                regex=r'^(\\+216)?[2459]\\d{7}$',
-                message="Le numéro doit être tunisien (ex: +21612345678 ou 12345678)"
+                regex=r'^(\+216)?[2459]\d{7}$',   # ✅ corrigé : \\ → \
+                message="Le numéro doit être tunisien (ex: +21655123456 ou 55123456)"
             )
         ]
     )
