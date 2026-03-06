@@ -30,7 +30,7 @@ class Formation(models.Model):
     blank=True
     )
 
-    description = models.TextField()
+    description = models.TextField(blank=True, default='')
     objectifs_pedagogiques = models.TextField()
     prerequis = models.TextField(blank=True, null=True)
 
