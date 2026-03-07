@@ -8,5 +8,6 @@ urlpatterns = [
     path('modifier/<int:pk>/', views.modifier_formation, name='modifier_formation'),
     path('supprimer/<int:pk>/', views.supprimer_formation, name='supprimer_formation'),
     path('categories-disponibles/', views.liste_categories_pour_formations, name='categories_pour_formations'),
-
+    # ✅ NOUVEAU
+    path('formateurs-disponibles/', views.liste_formateurs_pour_formations, name='formateurs_pour_formations'),
 ]
