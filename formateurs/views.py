@@ -20,6 +20,34 @@ class FormateurListCreateView(APIView):
         return Response(serializer.data, status=status.HTTP_200_OK)
 
     def post(self, request):
+        errors = {}
+        nom       = request.data.get('nom', '').strip()
+        prenom    = request.data.get('prenom', '').strip()
+        email     = request.data.get('email', '').strip()
+        telephone = request.data.get('telephone', '').strip()
+
+        # Doublon complet : même nom + prénom + email + téléphone
+        if nom and prenom and email and Formateur.objects.filter(
+            nom__iexact=nom,
+            prenom__iexact=prenom,
+            email__iexact=email,
+            telephone=telephone
+        ).exists():
+            errors['non_field_errors'] = (
+                "Un formateur avec le même nom, prénom, email et téléphone existe déjà."
+            )
+
+        # Unicité email
+        if email and Formateur.objects.filter(email__iexact=email).exists():
+            errors['email'] = "Cette adresse email est déjà utilisée par un autre formateur."
+
+        # Unicité téléphone
+        if telephone and Formateur.objects.filter(telephone=telephone).exists():
+            errors['telephone'] = "Ce numéro de téléphone est déjà utilisé par un autre formateur."
+
+        if errors:
+            return Response(errors, status=status.HTTP_400_BAD_REQUEST)
+
         serializer = FormateurSerializer(data=request.data, context={'request': request})
         if serializer.is_valid():
             serializer.save()
@@ -52,6 +80,22 @@ class FormateurDetailView(APIView):
         formateur = self.get_object(pk)
         if not formateur:
             return Response({'error': 'Formateur introuvable.'}, status=status.HTTP_404_NOT_FOUND)
+
+        errors = {}
+        email     = request.data.get('email', '').strip()
+        telephone = request.data.get('telephone', '').strip()
+
+        # Unicité email (exclure le formateur lui-même)
+        if email and Formateur.objects.filter(email__iexact=email).exclude(pk=pk).exists():
+            errors['email'] = "Cette adresse email est déjà utilisée par un autre formateur."
+
+        # Unicité téléphone (exclure le formateur lui-même)
+        if telephone and Formateur.objects.filter(telephone=telephone).exclude(pk=pk).exists():
+            errors['telephone'] = "Ce numéro de téléphone est déjà utilisé par un autre formateur."
+
+        if errors:
+            return Response(errors, status=status.HTTP_400_BAD_REQUEST)
+
         serializer = FormateurSerializer(
             formateur, data=request.data, partial=True, context={'request': request}
         )
@@ -65,4 +109,7 @@ class FormateurDetailView(APIView):
         if not formateur:
             return Response({'error': 'Formateur introuvable.'}, status=status.HTTP_404_NOT_FOUND)
         formateur.delete()
-        return Response({'message': 'Formateur supprimé avec succès.'}, status=status.HTTP_204_NO_CONTENT)
+        return Response(
+            {'message': 'Formateur supprimé avec succès.'},
+            status=status.HTTP_204_NO_CONTENT
+        )
