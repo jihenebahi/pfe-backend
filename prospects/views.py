@@ -1,0 +1,145 @@
+# prospects/views.py
+from rest_framework import status
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+from django.shortcuts import get_object_or_404
+
+from .models import Prospect, HistoriqueEchange
+from .serializers import (
+    ProspectSerializer,
+    ProspectListSerializer,
+    ProspectCreateUpdateSerializer,
+    HistoriqueEchangeSerializer,
+)
+
+
+# ──────────────────────────────────────────────
+#  LISTE + CRÉATION
+# ──────────────────────────────────────────────
+@api_view(['GET', 'POST'])
+@permission_classes([IsAuthenticated])
+def prospect_list_create(request):
+    """
+    GET  /api/prospects/        → liste paginée avec filtres
+    POST /api/prospects/        → créer un nouveau prospect
+    """
+    if request.method == 'GET':
+        queryset = Prospect.objects.select_related('responsable') \
+                                   .prefetch_related('formations_souhaitees').all()
+
+        # ── Filtres optionnels ──
+        statut  = request.query_params.get('statut')
+        source  = request.query_params.get('source')
+        search  = request.query_params.get('search')
+
+        if statut:
+            queryset = queryset.filter(statut=statut)
+        if source:
+            queryset = queryset.filter(source=source)
+        if search:
+            queryset = queryset.filter(
+                nom__icontains=search
+            ) | queryset.filter(
+                prenom__icontains=search
+            ) | queryset.filter(
+                email__icontains=search
+            ) | queryset.filter(
+                telephone__icontains=search
+            )
+
+        serializer = ProspectListSerializer(queryset, many=True)
+        return Response(serializer.data)
+
+    elif request.method == 'POST':
+        serializer = ProspectCreateUpdateSerializer(data=request.data)
+        if serializer.is_valid():
+            # Capture l'IP du client
+            x_forwarded = request.META.get('HTTP_X_FORWARDED_FOR')
+            ip = x_forwarded.split(',')[0] if x_forwarded else request.META.get('REMOTE_ADDR')
+            prospect = serializer.save(
+                ip_address=ip,
+                user_agent=request.META.get('HTTP_USER_AGENT', '')
+            )
+            return Response(
+                ProspectSerializer(prospect).data,
+                status=status.HTTP_201_CREATED
+            )
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+# ──────────────────────────────────────────────
+#  DÉTAIL + MODIFICATION + SUPPRESSION
+# ──────────────────────────────────────────────
+@api_view(['GET', 'PUT', 'PATCH', 'DELETE'])
+@permission_classes([IsAuthenticated])
+def prospect_detail(request, pk):
+    """
+    GET    /api/prospects/<pk>/  → détail complet avec historiques
+    PUT    /api/prospects/<pk>/  → modification complète
+    PATCH  /api/prospects/<pk>/  → modification partielle
+    DELETE /api/prospects/<pk>/  → suppression
+    """
+    prospect = get_object_or_404(Prospect, pk=pk)
+
+    if request.method == 'GET':
+        serializer = ProspectSerializer(prospect)
+        return Response(serializer.data)
+
+    elif request.method in ['PUT', 'PATCH']:
+        partial = request.method == 'PATCH'
+        serializer = ProspectCreateUpdateSerializer(
+            prospect, data=request.data, partial=partial
+        )
+        if serializer.is_valid():
+            updated = serializer.save()
+            return Response(ProspectSerializer(updated).data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    elif request.method == 'DELETE':
+        prospect.delete()
+        return Response(
+            {'message': 'Prospect supprimé avec succès.'},
+            status=status.HTTP_204_NO_CONTENT
+        )
+
+
+# ──────────────────────────────────────────────
+#  HISTORIQUE DES ÉCHANGES
+# ──────────────────────────────────────────────
+@api_view(['GET', 'POST'])
+@permission_classes([IsAuthenticated])
+def historique_list_create(request, prospect_pk):
+    """
+    GET  /api/prospects/<pk>/historiques/   → liste des échanges
+    POST /api/prospects/<pk>/historiques/   → ajouter un échange
+    """
+    prospect = get_object_or_404(Prospect, pk=prospect_pk)
+
+    if request.method == 'GET':
+        historiques = prospect.historiques.all()
+        serializer = HistoriqueEchangeSerializer(historiques, many=True)
+        return Response(serializer.data)
+
+    elif request.method == 'POST':
+        serializer = HistoriqueEchangeSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save(prospect=prospect, utilisateur=request.user)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+# ──────────────────────────────────────────────
+#  STATISTIQUES RAPIDES (dashboard)
+# ──────────────────────────────────────────────
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def prospect_stats(request):
+    """
+    GET /api/prospects/stats/  → compteurs par statut
+    """
+    from django.db.models import Count
+    stats = Prospect.objects.values('statut').annotate(count=Count('id'))
+    result = {item['statut']: item['count'] for item in stats}
+    result['total'] = Prospect.objects.count()
+    return Response(result)

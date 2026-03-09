@@ -26,7 +26,8 @@ INSTALLED_APPS = [
     'formation',
     'categories',
     'formateurs',
-
+    'prospects',
+    'etudiants',
 
 ]
 
