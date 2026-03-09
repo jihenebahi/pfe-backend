@@ -2,12 +2,21 @@ from rest_framework import serializers
 from .models import Formateur
 
 
+# ✅ Serializer léger pour afficher les formations liées avec id + intitule
+class FormationCourteSerializer(serializers.Serializer):
+    id       = serializers.IntegerField()
+    intitule = serializers.CharField()
+
+
 class FormateurSerializer(serializers.ModelSerializer):
 
     # Retourne l'URL complète pour chaque fichier PDF (ex: http://localhost:8000/media/...)
     contrat_pdf  = serializers.FileField(required=False, allow_null=True)
     cv_pdf       = serializers.FileField(required=False, allow_null=True)
     diplomes_pdf = serializers.FileField(required=False, allow_null=True)
+
+    # ✅ AJOUT : retourne les formations avec {id, intitule} au lieu de simples IDs
+    formations = FormationCourteSerializer(many=True, read_only=True)
 
     class Meta:
         model  = Formateur

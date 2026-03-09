@@ -15,7 +15,7 @@ class FormateurListCreateView(APIView):
     parser_classes = [MultiPartParser, FormParser, JSONParser]
 
     def get(self, request):
-        formateurs = Formateur.objects.all().order_by('-date_creation')
+        formateurs = Formateur.objects.all().prefetch_related('formations').order_by('-date_creation')
         serializer = FormateurSerializer(formateurs, many=True, context={'request': request})
         return Response(serializer.data, status=status.HTTP_200_OK)
 
@@ -65,7 +65,7 @@ class FormateurDetailView(APIView):
 
     def get_object(self, pk):
         try:
-            return Formateur.objects.get(pk=pk)
+            return Formateur.objects.prefetch_related('formations').get(pk=pk)
         except Formateur.DoesNotExist:
             return None
 
@@ -108,6 +108,23 @@ class FormateurDetailView(APIView):
         formateur = self.get_object(pk)
         if not formateur:
             return Response({'error': 'Formateur introuvable.'}, status=status.HTTP_404_NOT_FOUND)
+
+        # ── Bloquer la suppression si formations associées ────────────────────
+        nb_formations = formateur.formations.count()
+        if nb_formations > 0:
+            noms = list(formateur.formations.values_list('intitule', flat=True))
+            return Response(
+                {
+                    'error': 'suppression_bloquee',
+                    'message': (
+                        f"Impossible de supprimer ce formateur : il est associé à "
+                        f"{nb_formations} formation(s)."
+                    ),
+                    'formations': noms,
+                },
+                status=status.HTTP_409_CONFLICT
+            )
+
         formateur.delete()
         return Response(
             {'message': 'Formateur supprimé avec succès.'},
