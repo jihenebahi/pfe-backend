@@ -58,8 +58,7 @@ class Prospect(models.Model):
     STATUT_CHOICES = [
         ('nouveau', 'Nouveau'),
         ('contacte', 'Contacté'),
-        ('en_cours', 'En cours'),
-        ('qualifie', 'Qualifié'),
+        ('interesse',  'Intéressé'),
         ('converti', 'Converti'),
         ('perdu', 'Perdu'),
     ]
@@ -79,7 +78,7 @@ class Prospect(models.Model):
     nom = models.CharField(max_length=100)
     prenom = models.CharField(max_length=100)
     email = models.EmailField(validators=[EmailValidator()])
-    telephone = models.CharField(max_length=20)          # ✅ supprimé le validator regex (géré côté React)
+    telephone = models.CharField(max_length=20 ,unique=True)          # ✅ supprimé le validator regex (géré côté React)
     ville = models.CharField(max_length=100)             # ✅ obligatoire → supprimé blank=True
     pays = models.CharField(max_length=50, choices=PAYS_CHOICES)              # ✅ supprimé default
     
