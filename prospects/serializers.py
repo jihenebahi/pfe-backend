@@ -1,85 +1,74 @@
 # prospects/serializers.py
 from rest_framework import serializers
 from .models import Prospect, HistoriqueEchange
-
-# ✅ CORRECTION : le bon nom d'app est "formation" (singulier)
 from formation.models import Formation
 
 
-# ── Serializer Formation simplifié (pour l'affichage dans les prospects) ──
 class FormationMinSerializer(serializers.ModelSerializer):
     class Meta:
         model  = Formation
         fields = ['id', 'intitule', 'duree', 'format', 'niveau']
 
 
-# ── Historique des échanges ──
 class HistoriqueEchangeSerializer(serializers.ModelSerializer):
-    utilisateur_nom = serializers.CharField(
-        source='utilisateur.username', read_only=True
-    )
+    utilisateur_nom = serializers.CharField(source='utilisateur.username', read_only=True)
 
     class Meta:
         model  = HistoriqueEchange
-        fields = [
-            'id', 'type_echange', 'date_echange',
-            'utilisateur', 'utilisateur_nom', 'contenu', 'notes'
-        ]
+        fields = ['id', 'type_echange', 'date_echange',
+                  'utilisateur', 'utilisateur_nom', 'contenu', 'notes']
         read_only_fields = ['date_echange']
 
 
-# ── Prospect complet (lecture détail) ──
 class ProspectSerializer(serializers.ModelSerializer):
-    historiques              = HistoriqueEchangeSerializer(many=True, read_only=True)
-    responsable_nom          = serializers.CharField(
-        source='responsable.username', read_only=True, default=None
-    )
-    nom_complet              = serializers.CharField(read_only=True)
+    historiques                  = HistoriqueEchangeSerializer(many=True, read_only=True)
+    responsable_nom              = serializers.CharField(
+        source='responsable.username', read_only=True, default=None)
+    nom_complet                  = serializers.CharField(read_only=True)
     formations_souhaitees_detail = FormationMinSerializer(
-        source='formations_souhaitees', many=True, read_only=True
-    )
-    formations_noms          = serializers.CharField(read_only=True)
+        source='formations_souhaitees', many=True, read_only=True)
+    formations_noms              = serializers.CharField(read_only=True)
 
     class Meta:
         model  = Prospect
         fields = [
             'id', 'nom', 'prenom', 'nom_complet', 'email', 'telephone',
-            'ville', 'pays', 'source', 'type_prospect', 'service_recherche',
+            'ville', 'pays',
+            # ← champs hérités de PersonneBase
+            'date_naissance', 'genre', 'niveau_etudes', 'diplome_obtenu',
+            'source',
             'formations_souhaitees', 'formations_souhaitees_detail', 'formations_noms',
-            'niveau_estime', 'mode_prefere', 'disponibilite',
+            'niveau_estime', 'mode_prefere',
             'canal_contact_prefere', 'commentaires',
             'statut', 'responsable', 'responsable_nom',
             'date_creation', 'date_modification',
             'ip_address', 'user_agent', 'historiques',
         ]
-        read_only_fields = [
-            'date_creation', 'date_modification', 'ip_address', 'user_agent'
-        ]
+        read_only_fields = ['date_creation', 'date_modification', 'ip_address', 'user_agent']
 
 
-# ── Liste simplifiée (tableau) ──
 class ProspectListSerializer(serializers.ModelSerializer):
     formations_noms = serializers.CharField(read_only=True)
     responsable_nom = serializers.CharField(
-        source='responsable.username', read_only=True, default=None
-    )
+        source='responsable.username', read_only=True, default=None)
 
     class Meta:
         model  = Prospect
         fields = [
             'id', 'nom', 'prenom', 'email', 'telephone',
-            'formations_noms', 'statut', 'source',
-            'responsable_nom', 'date_creation',
+            'ville', 'pays',
+            'date_naissance', 'genre', 'niveau_etudes', 'diplome_obtenu',
+            'source',
+            'formations_souhaitees', 'formations_noms',
+            'niveau_estime', 'mode_prefere',
+            'canal_contact_prefere', 'commentaires',
+            'statut', 'responsable', 'responsable_nom', 'date_creation',
         ]
 
 
-# ── Création / Modification ──
 class ProspectCreateUpdateSerializer(serializers.ModelSerializer):
     formations_souhaitees = serializers.PrimaryKeyRelatedField(
-        many=True,
-        queryset=Formation.objects.all(),
-        required=False
-    )
+        many=True, queryset=Formation.objects.all(), required=False)
 
     class Meta:
         model  = Prospect
