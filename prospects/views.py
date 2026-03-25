@@ -57,14 +57,17 @@ def prospect_list_create(request):
             # Capture l'IP du client
             x_forwarded = request.META.get('HTTP_X_FORWARDED_FOR')
             ip = x_forwarded.split(',')[0] if x_forwarded else request.META.get('REMOTE_ADDR')
+                  # ✅ MODIFICATION: Ajouter automatiquement l'utilisateur connecté comme responsable
             prospect = serializer.save(
                 ip_address=ip,
-                user_agent=request.META.get('HTTP_USER_AGENT', '')
+                user_agent=request.META.get('HTTP_USER_AGENT', ''),
+                responsable=request.user  # ← Ajout automatique du responsable
             )
             return Response(
                 ProspectSerializer(prospect).data,
                 status=status.HTTP_201_CREATED
-            )
+            )      
+
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 

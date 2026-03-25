@@ -74,6 +74,9 @@ class ProspectCreateUpdateSerializer(serializers.ModelSerializer):
         model  = Prospect
         fields = '__all__'
         read_only_fields = ['date_creation', 'date_modification']
+        extra_kwargs = {
+            'responsable': {'required': False}  # ✅ Rendre responsable optionnel
+        }
 
     def create(self, validated_data):
         formations = validated_data.pop('formations_souhaitees', [])
