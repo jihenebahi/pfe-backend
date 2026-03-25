@@ -20,6 +20,12 @@ class Etudiant(PersonneBase):
         ('certifie',   'Certifié'),
     ]
 
+    MODE_PAIEMENT_CHOICES = [
+        ('espece',   'Espèce'),
+        ('cheque',   'Chèque'),
+        ('virement', 'Virement'),
+    ]
+
     # Formations (plusieurs possibles, comme pour le prospect)
     formations_suivies = models.ManyToManyField(
         Formation,
@@ -36,7 +42,15 @@ class Etudiant(PersonneBase):
         related_name='etudiants_suivis'
     )
     notes            = models.TextField(blank=True)
-
+    
+    # Champs de paiement (simplifiés)
+    mode_paiement    = models.CharField(
+        max_length=20, 
+        choices=MODE_PAIEMENT_CHOICES, 
+        default='espece',
+        help_text="Mode de paiement par défaut"
+    )
+    
     date_creation     = models.DateTimeField(auto_now_add=True)
     date_modification = models.DateTimeField(auto_now=True)
 
@@ -45,16 +59,16 @@ class Etudiant(PersonneBase):
         verbose_name       = "Étudiant"
         verbose_name_plural = "Étudiants"
 
+    def __str__(self):
+        return f"{self.nom_complet} ({self.get_statut_display()})"
+
     @property
     def formations_noms(self):
         return ", ".join([f.intitule for f in self.formations_suivies.all()])
 
     @property
-    def solde_restant(self):
-        """Calcule la somme restante à payer sur tous les paiements"""
-        total = sum(p.montant_total for p in self.paiements.all())
-        paye  = sum(p.montant_paye  for p in self.paiements.all())
-        return total - paye
+    def nom_complet(self):
+        return f"{self.prenom} {self.nom}"
 
 
 class Document(models.Model):
@@ -84,65 +98,3 @@ class Document(models.Model):
 
     def __str__(self):
         return f"{self.get_type_document_display()} — {self.etudiant.nom_complet}"
-
-
-class Paiement(models.Model):
-    """Un versement effectué par l'étudiant"""
-
-    MODE_CHOICES = [
-        ('espece',   'Espèce'),
-        ('cheque',   'Chèque'),
-        ('virement', 'Virement'),
-    ]
-
-    STATUT_CHOICES = [
-        ('en_attente', 'En attente'),
-        ('partiel',    'Partiel'),
-        ('complet',    'Complet'),
-    ]
-
-    etudiant       = models.ForeignKey(
-        Etudiant, on_delete=models.CASCADE, related_name='paiements'
-    )
-    montant_total  = models.DecimalField(max_digits=10, decimal_places=3)   # en TND
-    montant_paye   = models.DecimalField(max_digits=10, decimal_places=3, default=0)
-    mode_paiement  = models.CharField(max_length=20, choices=MODE_CHOICES)
-    statut         = models.CharField(
-        max_length=20, choices=STATUT_CHOICES, default='en_attente'
-    )
-    date_paiement  = models.DateField()
-    reference      = models.CharField(
-        max_length=100, blank=True,
-        help_text="N° chèque, référence virement, etc."
-    )
-    notes          = models.TextField(blank=True)
-    enregistre_par = models.ForeignKey(
-        User, on_delete=models.SET_NULL, null=True, blank=True
-    )
-    date_creation  = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        ordering           = ['-date_paiement']
-        verbose_name       = "Paiement"
-        verbose_name_plural = "Paiements"
-
-    def __str__(self):
-        return (
-            f"{self.etudiant.nom_complet} — "
-            f"{self.montant_paye}/{self.montant_total} TND — "
-            f"{self.get_statut_display()}"
-        )
-
-    @property
-    def montant_restant(self):
-        return self.montant_total - self.montant_paye
-
-    def save(self, *args, **kwargs):
-        """Met à jour le statut automatiquement selon les montants"""
-        if self.montant_paye <= 0:
-            self.statut = 'en_attente'
-        elif self.montant_paye < self.montant_total:
-            self.statut = 'partiel'
-        else:
-            self.statut = 'complet'
-        super().save(*args, **kwargs)

@@ -12,4 +12,6 @@ urlpatterns = [
 
     # ── Statistiques ──
     path('stats/', views.prospect_stats, name='prospect-stats'),
+    
+    path('<int:pk>/convert/', views.convert_to_etudiant, name='convert-to-etudiant'),
 ]

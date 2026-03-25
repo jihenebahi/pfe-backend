@@ -146,3 +146,78 @@ def prospect_stats(request):
     result = {item['statut']: item['count'] for item in stats}
     result['total'] = Prospect.objects.count()
     return Response(result)
+
+
+
+# ──────────────────────────────────────────────
+#  CONVERSION PROSPECT → ÉTUDIANT
+# ──────────────────────────────────────────────
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def convert_to_etudiant(request, pk):
+    """
+    POST /api/prospects/<pk>/convert/
+    Crée un Etudiant à partir du prospect, puis supprime le prospect.
+    Body attendu :
+      {
+        "formations_ids":   [1, 2],         # IDs des formations suivies
+        "mode_formation":   "Présentiel",
+        "statut_etudiant":  "Actif",
+        "notes":            "..."
+      }
+    """
+    from etudiants.models import Etudiant
+    from formation.models import Formation
+
+    prospect = get_object_or_404(Prospect, pk=pk)
+
+    # ── Mappings FR → slug Django ──
+    STATUT_MAP = {
+        'Actif':     'actif',
+        'Abandonné': 'abandonne',
+        'Certifié':  'certifie',
+    }
+    MODE_MAP = {
+        'Présentiel': 'presentiel',
+        'En ligne':   'en_ligne',
+        'Hybride':    'hybride',
+    }
+
+    statut          = STATUT_MAP.get(request.data.get('statut_etudiant', 'Actif'), 'actif')
+    mode_paiement   = 'espece'          # valeur par défaut
+    formations_ids  = request.data.get('formations_ids', [])
+    notes           = request.data.get('notes', '')
+
+    # ── Création de l'étudiant (hérite des données du prospect) ──
+    etudiant = Etudiant(
+        nom           = prospect.nom,
+        prenom        = prospect.prenom,
+        email         = prospect.email,
+        telephone     = prospect.telephone,
+        ville         = prospect.ville,
+        pays          = prospect.pays,
+        date_naissance= prospect.date_naissance,
+        genre         = prospect.genre,
+        niveau_etudes = prospect.niveau_etudes,
+        diplome_obtenu= prospect.diplome_obtenu,
+        statut        = statut,
+        mode_paiement = mode_paiement,
+        responsable   = request.user,
+        notes         = notes,
+    )
+    etudiant.save()
+
+    # ── Formations : celles sélectionnées dans le formulaire (ou celles du prospect) ──
+    if formations_ids:
+        formations = Formation.objects.filter(id__in=formations_ids)
+        etudiant.formations_suivies.set(formations)
+    else:
+        etudiant.formations_suivies.set(prospect.formations_souhaitees.all())
+
+    # ── Suppression du prospect ──
+    prospect.delete()
+
+    return Response(
+        {'message': 'Prospect converti en étudiant avec succès.', 'etudiant_id': etudiant.id},
+        status=status.HTTP_201_CREATED
+    )
