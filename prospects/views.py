@@ -152,6 +152,8 @@ def prospect_stats(request):
 # ──────────────────────────────────────────────
 #  CONVERSION PROSPECT → ÉTUDIANT
 # ──────────────────────────────────────────────
+# prospects/views.py - modifier la fonction convert_to_etudiant
+
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def convert_to_etudiant(request, pk):
@@ -160,13 +162,13 @@ def convert_to_etudiant(request, pk):
     Crée un Etudiant à partir du prospect, puis supprime le prospect.
     Body attendu :
       {
-        "formations_ids":   [1, 2],         # IDs des formations suivies
-        "mode_formation":   "Présentiel",
+        "formations_ids":   [1, 2],
         "statut_etudiant":  "Actif",
-        "notes":            "..."
+        "notes":            "...",
+        "documents_fournis": ["CIN", "CV", "Contrat", ...]  # ← AJOUT
       }
     """
-    from etudiants.models import Etudiant
+    from etudiants.models import Etudiant, Document  # ← IMPORT Document
     from formation.models import Formation
 
     prospect = get_object_or_404(Prospect, pk=pk)
@@ -177,18 +179,24 @@ def convert_to_etudiant(request, pk):
         'Abandonné': 'abandonne',
         'Certifié':  'certifie',
     }
-    MODE_MAP = {
-        'Présentiel': 'presentiel',
-        'En ligne':   'en_ligne',
-        'Hybride':    'hybride',
+    
+    # ── Mapping pour les types de documents ──
+    DOCUMENT_TYPE_MAP = {
+        'CIN':      'cin',
+        'CV':       'cv',
+        'Contrat':  'contrat',
+        'Reçu':     'recu',
+        'RNE':      'rne',
+        'Autres':   'autre',
     }
 
     statut          = STATUT_MAP.get(request.data.get('statut_etudiant', 'Actif'), 'actif')
-    mode_paiement   = 'espece'          # valeur par défaut
+    mode_paiement   = 'espece'
     formations_ids  = request.data.get('formations_ids', [])
     notes           = request.data.get('notes', '')
+    documents_fournis = request.data.get('documents_fournis', [])  # ← RÉCUPÉRATION
 
-    # ── Création de l'étudiant (hérite des données du prospect) ──
+    # ── Création de l'étudiant ──
     etudiant = Etudiant(
         nom           = prospect.nom,
         prenom        = prospect.prenom,
@@ -207,7 +215,17 @@ def convert_to_etudiant(request, pk):
     )
     etudiant.save()
 
-    # ── Formations : celles sélectionnées dans le formulaire (ou celles du prospect) ──
+    # ── Création des documents (sans fichier, juste pour tracer la présence) ──
+    for doc in documents_fournis:
+        doc_type = DOCUMENT_TYPE_MAP.get(doc, 'autre')
+        Document.objects.create(
+            etudiant=etudiant,
+            type_document=doc_type,
+            fichier=None,  # Pas de fichier uploadé, juste un enregistrement
+            commentaire=f"Document fourni en version physique : {doc}"
+        )
+
+    # ── Formations ──
     if formations_ids:
         formations = Formation.objects.filter(id__in=formations_ids)
         etudiant.formations_suivies.set(formations)

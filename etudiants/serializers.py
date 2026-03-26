@@ -10,12 +10,16 @@ class FormationMinSerializer(serializers.ModelSerializer):
         fields = ['id', 'intitule', 'duree', 'format', 'niveau']
 
 
-class DocumentSerializer(serializers.ModelSerializer):
-    class Meta:
-        model  = Document
-        fields = ['id', 'type_document', 'fichier', 'date_upload', 'commentaire']
-        read_only_fields = ['date_upload']
+# etudiants/serializers.py - DocumentSerializer est déjà correct
 
+class DocumentSerializer(serializers.ModelSerializer):
+    # Ajouter un champ pour le nom du document en français
+    type_display = serializers.CharField(source='get_type_document_display', read_only=True)
+    
+    class Meta:
+        model = Document
+        fields = ['id', 'type_document', 'type_display', 'fichier', 'date_upload', 'commentaire']
+        read_only_fields = ['date_upload']
 
 class EtudiantSerializer(serializers.ModelSerializer):
     formations_noms           = serializers.CharField(read_only=True)

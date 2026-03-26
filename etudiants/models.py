@@ -72,7 +72,11 @@ class Etudiant(PersonneBase):
 
 
 class Document(models.Model):
-    """Documents fournis par l'étudiant (CIN, CV, Contrat, Reçu, RNE, Autre)"""
+    """
+    Documents fournis par l'étudiant (CIN, CV, Contrat, Reçu, RNE, Autre)
+    Ce modèle enregistre les documents physiques fournis par l'étudiant
+    sans nécessairement avoir un fichier uploadé.
+    """
 
     TYPE_CHOICES = [
         ('cin',      'CIN'),
@@ -83,17 +87,37 @@ class Document(models.Model):
         ('autre',    'Autre'),
     ]
 
-    etudiant     = models.ForeignKey(
-        Etudiant, on_delete=models.CASCADE, related_name='documents'
+    etudiant = models.ForeignKey(
+        Etudiant,
+        on_delete=models.CASCADE,
+        related_name='documents'
     )
-    type_document = models.CharField(max_length=20, choices=TYPE_CHOICES)
-    fichier       = models.FileField(upload_to='etudiants/documents/%Y/%m/')
-    date_upload   = models.DateTimeField(auto_now_add=True)
-    commentaire   = models.CharField(max_length=255, blank=True)
+    type_document = models.CharField(
+        max_length=20,
+        choices=TYPE_CHOICES,
+        verbose_name="Type de document"
+    )
+    fichier = models.FileField(
+        upload_to='etudiants/documents/%Y/%m/',
+        blank=True,
+        null=True,
+        verbose_name="Fichier (optionnel)",
+        help_text="Upload du fichier si disponible en version numérique"
+    )
+    date_upload = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name="Date d'enregistrement"
+    )
+    commentaire = models.CharField(
+        max_length=255,
+        blank=True,
+        verbose_name="Commentaire",
+        help_text="Information supplémentaire sur le document (ex: document physique fourni)"
+    )
 
     class Meta:
-        ordering           = ['-date_upload']
-        verbose_name       = "Document"
+        ordering = ['-date_upload']
+        verbose_name = "Document"
         verbose_name_plural = "Documents"
 
     def __str__(self):
