@@ -22,20 +22,17 @@ class PersonneBase(models.Model):
     ]
 
     NIVEAU_ETUDES_CHOICES = [
-        ('lycee',    'Lycée'),
-        ('bac',      'Bac'),
-        ('licence',  'Licence'),
-        ('master',   'Master'),
-        ('doctorat', 'Doctorat'),
-        ('autre',    'Autre'),
+        ('primaire',       'Primaire'),
+        ('preparatoire',   'Préparatoire'),
+        ('secondaire',     'Secondaire'),
+        ('universitaire',  'Universitaire'),
     ]
 
     DIPLOME_CHOICES = [
-        ('baccalaureat', 'Baccalauréat'),
-        ('licence',      'Licence'),
-        ('master',       'Master'),
-        ('aucun',        'Aucun'),
-        ('autre',        'Autre'),
+        ('bac',     'Bac'),
+        ('licence', 'Licence'),
+        ('master',  'Master'),
+        ('autre',   'Autre'),
     ]
 
     # Champs communs
