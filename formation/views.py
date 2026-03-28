@@ -14,7 +14,18 @@ from formateurs.serializers import FormateurSerializer
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def liste_formations(request):
-    formations = Formation.objects.all().select_related('categorie').prefetch_related('formateurs').order_by('-date_creation')
+    """Retourne uniquement les formations ACTIVES (non archivées)"""
+    formations = Formation.objects.filter(est_active=True).select_related('categorie').prefetch_related('formateurs').order_by('-date_creation')
+    serializer = FormationSerializer(formations, many=True)
+    return Response(serializer.data)
+
+
+# ✅ NOUVEAU : Liste des formations archivées
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def liste_formations_archivees(request):
+    """Retourne uniquement les formations ARCHIVÉES (est_active=False)"""
+    formations = Formation.objects.filter(est_active=False).select_related('categorie').prefetch_related('formateurs').order_by('-date_modification')
     serializer = FormationSerializer(formations, many=True)
     return Response(serializer.data)
 
@@ -68,6 +79,36 @@ def supprimer_formation(request, pk):
     return Response({'message': 'Formation supprimée avec succès'}, status=status.HTTP_204_NO_CONTENT)
 
 
+# ✅ NOUVEAU : Archiver une formation (est_active = False)
+@api_view(['PATCH'])
+@permission_classes([IsAuthenticated])
+def archiver_formation(request, pk):
+    try:
+        formation = Formation.objects.get(pk=pk)
+    except Formation.DoesNotExist:
+        return Response({'error': 'Formation non trouvée'}, status=status.HTTP_404_NOT_FOUND)
+
+    formation.est_active = False
+    formation.save()
+    serializer = FormationSerializer(formation)
+    return Response(serializer.data)
+
+
+# ✅ NOUVEAU : Réactiver une formation archivée (est_active = True)
+@api_view(['PATCH'])
+@permission_classes([IsAuthenticated])
+def reactiver_formation(request, pk):
+    try:
+        formation = Formation.objects.get(pk=pk)
+    except Formation.DoesNotExist:
+        return Response({'error': 'Formation non trouvée'}, status=status.HTTP_404_NOT_FOUND)
+
+    formation.est_active = True
+    formation.save()
+    serializer = FormationSerializer(formation)
+    return Response(serializer.data)
+
+
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def liste_categories_pour_formations(request):
@@ -76,7 +117,6 @@ def liste_categories_pour_formations(request):
     return Response(serializer.data)
 
 
-# ✅ NOUVEAU : Liste des formateurs actifs pour le select du formulaire formation
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def liste_formateurs_pour_formations(request):
