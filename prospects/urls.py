@@ -14,4 +14,8 @@ urlpatterns = [
     path('stats/', views.prospect_stats, name='prospect-stats'),
     
     path('<int:pk>/convert/', views.convert_to_etudiant, name='convert-to-etudiant'),
+
+    # Import excel    
+    path('import/',             views.import_prospects_excel,   name='import-prospects'),
+
 ]

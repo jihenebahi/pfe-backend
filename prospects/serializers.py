@@ -34,7 +34,6 @@ class ProspectSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'nom', 'prenom', 'nom_complet', 'email', 'telephone',
             'ville', 'pays',
-            # ← champs hérités de PersonneBase
             'date_naissance', 'genre', 'niveau_etudes', 'diplome_obtenu',
             'source',
             'formations_souhaitees', 'formations_souhaitees_detail', 'formations_noms',
@@ -70,12 +69,17 @@ class ProspectCreateUpdateSerializer(serializers.ModelSerializer):
     formations_souhaitees = serializers.PrimaryKeyRelatedField(
         many=True, queryset=Formation.objects.all(), required=False)
 
+    # ✅ MODIFIÉ : email rendu explicitement optionnel dans le serializer.
+    # required=False → l'API n'exige plus ce champ dans le body.
+    # allow_blank=True → une chaîne vide '' est acceptée sans erreur.
+    email = serializers.EmailField(required=False, allow_blank=True, default='')
+
     class Meta:
         model  = Prospect
         fields = '__all__'
         read_only_fields = ['date_creation', 'date_modification']
         extra_kwargs = {
-            'responsable': {'required': False}  # ✅ Rendre responsable optionnel
+            'responsable': {'required': False},
         }
 
     def create(self, validated_data):

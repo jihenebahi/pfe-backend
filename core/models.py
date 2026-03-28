@@ -35,26 +35,35 @@ class PersonneBase(models.Model):
         ('autre',   'Autre'),
     ]
 
-    # Champs communs
-    nom      = models.CharField(max_length=100)
-    prenom   = models.CharField(max_length=100)
-    email    = models.EmailField(validators=[EmailValidator()])
-    telephone = models.CharField(max_length=20, unique=True)
-    ville    = models.CharField(max_length=100)
-    pays     = models.CharField(max_length=50, choices=PAYS_CHOICES)
+    nom       = models.CharField(max_length=100)
+    prenom    = models.CharField(max_length=100)
 
-    # Nouveaux champs demandés par le centre
+    # ✅ MODIFIÉ : blank=True → le champ est optionnel dans les formulaires et l'API.
+    # On garde validators=[EmailValidator()] pour s'assurer que si une valeur
+    # est fournie, elle respecte bien le format email.
+    email     = models.EmailField(
+        blank=True,
+        default='',
+        validators=[EmailValidator()],
+    )
+
+    telephone = models.CharField(max_length=20, unique=True)
+    ville     = models.CharField(max_length=100)
+    pays      = models.CharField(max_length=50, choices=PAYS_CHOICES)
+
     date_naissance  = models.DateField(null=True, blank=True)
     genre           = models.CharField(max_length=10, choices=GENRE_CHOICES, blank=True)
     niveau_etudes   = models.CharField(max_length=20, choices=NIVEAU_ETUDES_CHOICES, blank=True)
     diplome_obtenu  = models.CharField(max_length=20, choices=DIPLOME_CHOICES, blank=True)
 
     class Meta:
-        abstract = True   # ← clé : pas de table créée pour cette classe
+        abstract = True
 
     @property
     def nom_complet(self):
         return f"{self.prenom} {self.nom}"
 
     def __str__(self):
-        return f"{self.prenom} {self.nom} - {self.email}"
+        # ✅ MODIFIÉ : on affiche le téléphone si l'email est absent
+        contact = self.email if self.email else self.telephone
+        return f"{self.prenom} {self.nom} - {contact}"
