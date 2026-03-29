@@ -286,6 +286,112 @@ def delete_user(request, user_id):
     user.delete()
     return Response({'success': True, 'message': 'Utilisateur supprime avec succes.'}, status=status.HTTP_200_OK)
 
+# ✅ NOUVEAU : Modifier un utilisateur (super_admin uniquement)
+# Ajouter cette fonction dans views.py, après delete_user
+
+@api_view(['PUT'])
+@permission_classes([IsAuthenticated])
+def update_user(request, user_id):
+    if not is_super_admin(request.user):
+        return Response(
+            {'success': False, 'message': 'Accès refusé. Réservé au Super Administrateur.'},
+            status=status.HTTP_403_FORBIDDEN
+        )
+
+    try:
+        user = User.objects.get(id=user_id)
+    except User.DoesNotExist:
+        return Response(
+            {'success': False, 'message': 'Utilisateur introuvable.'},
+            status=status.HTTP_404_NOT_FOUND
+        )
+
+    first_name = request.data.get('first_name', user.first_name).strip()
+    last_name  = request.data.get('last_name',  user.last_name).strip()
+    email      = request.data.get('email',      user.email).strip().lower()
+    phone      = request.data.get('phone',      user.phone).strip()
+    role       = request.data.get('role',       user.role).strip()
+    is_active  = request.data.get('is_active',  user.is_active)
+    password   = request.data.get('password',   '').strip()  # optionnel
+
+    if isinstance(is_active, str):
+        is_active = is_active.lower() in ('true', '1', 'actif')
+
+    errors = {}
+
+    if not first_name:
+        errors['first_name'] = 'Le prénom est obligatoire.'
+    elif len(first_name) < 2:
+        errors['first_name'] = 'Le prénom doit contenir au moins 2 caractères.'
+
+    if not last_name:
+        errors['last_name'] = 'Le nom est obligatoire.'
+    elif len(last_name) < 2:
+        errors['last_name'] = 'Le nom doit contenir au moins 2 caractères.'
+
+    email_regex = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+    if not email:
+        errors['email'] = "L'adresse e-mail est obligatoire."
+    elif not re.match(email_regex, email):
+        errors['email'] = "Format d'e-mail invalide."
+    elif User.objects.filter(email=email).exclude(id=user_id).exists():
+        errors['email'] = 'Un compte avec cet e-mail existe déjà.'
+
+    valid_roles = [r[0] for r in User.ROLE_CHOICES]
+    if not role:
+        errors['role'] = 'Le rôle est obligatoire.'
+    elif role not in valid_roles:
+        errors['role'] = f'Rôle invalide. Valeurs acceptées : {", ".join(valid_roles)}.'
+
+    # Mot de passe optionnel : validé seulement s'il est fourni
+    if password and len(password) < 8:
+        errors['password'] = 'Le mot de passe doit contenir au moins 8 caractères.'
+
+    if errors:
+        return Response(
+            {'success': False, 'message': 'Données invalides.', 'errors': errors},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    # ── Appliquer les modifications ──
+    user.first_name = first_name
+    user.last_name  = last_name
+    user.is_active  = is_active
+    user.phone      = phone
+    user.role       = role
+
+    # Si l'email change → mettre à jour aussi le username
+    if email != user.email:
+        user.email = email
+        # Recalculer un username unique basé sur le nouveau nom
+        base_username = re.sub(r'[^a-z0-9]', '', f"{first_name}{last_name}".lower()) or email.split('@')[0]
+        username = base_username
+        counter  = 1
+        while User.objects.filter(username=username).exclude(id=user_id).exists():
+            username = f"{base_username}{counter}"
+            counter += 1
+        user.username = username
+
+    # Si un nouveau mot de passe est fourni
+    if password:
+        user.set_password(password)
+        user.password_plain = password
+
+    user.save()
+
+    full_name = f"{user.first_name} {user.last_name}".strip()
+    return Response({
+        'success': True,
+        'message': f'Le compte de {full_name} a été modifié avec succès.',
+        'user': {
+            'id':        user.id,
+            'code':      f'#USR-{str(user.id).zfill(3)}',
+            'nom':       full_name,
+            'email':     user.email,
+            'role':      user.role,
+            'is_active': user.is_active,
+        }
+    }, status=status.HTTP_200_OK)
 
 # ═══════════════════════════════════════════════════════════════════
 # ── MOT DE PASSE OUBLIÉ ───────────────────────────────────────────
