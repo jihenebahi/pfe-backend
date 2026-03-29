@@ -96,3 +96,45 @@ class ProspectCreateUpdateSerializer(serializers.ModelSerializer):
         if formations is not None:
             instance.formations_souhaitees.set(formations)
         return instance
+    
+# ──────────────────────────────────────────────────────────────────────────────
+#  À AJOUTER à la fin de  prospects/serializers.py
+# ──────────────────────────────────────────────────────────────────────────────
+
+from .models import Relance   # ← ajouter Relance à l'import existant
+
+
+class RelanceSerializer(serializers.ModelSerializer):
+    """Serializer complet — utilisé pour le détail et la liste dashboard."""
+
+    statut_calcule  = serializers.CharField(read_only=True)
+    created_by_nom  = serializers.CharField(
+        source='created_by.username', read_only=True, default=None
+    )
+
+    # Infos prospect dénormalisées pour le dashboard (lecture seule)
+    prospect_nom      = serializers.CharField(source='prospect.nom',       read_only=True)
+    prospect_prenom   = serializers.CharField(source='prospect.prenom',    read_only=True)
+    prospect_telephone = serializers.CharField(source='prospect.telephone', read_only=True)
+
+    class Meta:
+        model  = Relance
+        fields = [
+            'id',
+            'prospect', 'prospect_nom', 'prospect_prenom', 'prospect_telephone',
+            'date_relance', 'commentaire',
+            'statut', 'statut_calcule',
+            'date_action', 'created_by', 'created_by_nom',
+            'date_creation',
+        ]
+        read_only_fields = ['date_action', 'date_creation', 'created_by']
+
+
+class RelanceCreateSerializer(serializers.ModelSerializer):
+    """Serializer allégé pour la création / mise à jour."""
+
+    class Meta:
+        model  = Relance
+        fields = ['id', 'date_relance', 'commentaire', 'statut']
+        read_only_fields = []
+        

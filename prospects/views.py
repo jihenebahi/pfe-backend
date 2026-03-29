@@ -5,12 +5,18 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
 
+from .models import Prospect, HistoriqueEchange, Relance
+from django.utils import timezone
+
 from .models import Prospect, HistoriqueEchange
 from .serializers import (
     ProspectSerializer,
     ProspectListSerializer,
     ProspectCreateUpdateSerializer,
     HistoriqueEchangeSerializer,
+    RelanceSerializer,
+    RelanceCreateSerializer
+
 )
 
 
@@ -464,3 +470,179 @@ def import_prospects_excel(request):
         'errors':  errors,
         'total':   created_count + len(errors),
     }, status=status.HTTP_200_OK)
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+#  À AJOUTER à la fin de  prospects/views.py
+#  (+ ajouter les imports ci-dessous en haut du fichier)
+# ──────────────────────────────────────────────────────────────────────────────
+#
+#  Imports à ajouter en haut de views.py :
+#
+#  from .models      import Prospect, HistoriqueEchange, Relance
+#  from .serializers import (
+#      ...,                        # imports existants
+#      RelanceSerializer,
+#      RelanceCreateSerializer,
+#  )
+#  from django.utils import timezone
+#
+# ──────────────────────────────────────────────────────────────────────────────
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+#  1. LISTE DE TOUTES LES RELANCES  (dashboard Home)
+#     GET  /api/prospects/relances/
+# ──────────────────────────────────────────────────────────────────────────────
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def all_relances(request):
+    """
+    Retourne toutes les relances triées par date.
+    Paramètres URL optionnels :
+      ?statut=fait|en_retard|aujourd_hui|a_venir
+    """
+    from django.utils import timezone
+    from datetime import date
+
+    relances = Relance.objects.select_related('prospect', 'created_by').all()
+
+    statut_filter = request.query_params.get('statut')
+    today = date.today()
+
+    if statut_filter == 'fait':
+        relances = relances.filter(statut='fait')
+    elif statut_filter == 'en_retard':
+        relances = relances.exclude(statut='fait').filter(date_relance__lt=today)
+    elif statut_filter == 'aujourd_hui':
+        relances = relances.exclude(statut='fait').filter(date_relance=today)
+    elif statut_filter == 'a_venir':
+        relances = relances.exclude(statut='fait').filter(date_relance__gt=today)
+    # 'pending' = en_retard + aujourd_hui
+    elif statut_filter == 'pending':
+        relances = relances.exclude(statut='fait').filter(date_relance__lte=today)
+
+    serializer = RelanceSerializer(relances, many=True)
+    return Response(serializer.data)
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+#  2. RELANCES D'UN PROSPECT
+#     GET  /api/prospects/<pk>/relances/
+#     POST /api/prospects/<pk>/relances/
+# ──────────────────────────────────────────────────────────────────────────────
+@api_view(['GET', 'POST'])
+@permission_classes([IsAuthenticated])
+def relance_list_create(request, prospect_pk):
+    prospect = get_object_or_404(Prospect, pk=prospect_pk)
+
+    if request.method == 'GET':
+        relances   = prospect.relances.all()
+        serializer = RelanceSerializer(relances, many=True)
+        return Response(serializer.data)
+
+    elif request.method == 'POST':
+        serializer = RelanceCreateSerializer(data=request.data)
+        if serializer.is_valid():
+            relance = serializer.save(
+                prospect=prospect,
+                created_by=request.user,
+            )
+            return Response(
+                RelanceSerializer(relance).data,
+                status=status.HTTP_201_CREATED
+            )
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+#  3. DÉTAIL / MODIF / SUPPRESSION D'UNE RELANCE
+#     GET    /api/relances/<pk>/
+#     PATCH  /api/relances/<pk>/
+#     DELETE /api/relances/<pk>/
+# ──────────────────────────────────────────────────────────────────────────────
+@api_view(['GET', 'PATCH', 'DELETE'])
+@permission_classes([IsAuthenticated])
+def relance_detail(request, pk):
+    relance = get_object_or_404(Relance, pk=pk)
+
+    if request.method == 'GET':
+        return Response(RelanceSerializer(relance).data)
+
+    elif request.method == 'PATCH':
+        serializer = RelanceCreateSerializer(relance, data=request.data, partial=True)
+        if serializer.is_valid():
+            updated = serializer.save()
+            return Response(RelanceSerializer(updated).data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    elif request.method == 'DELETE':
+        relance.delete()
+        return Response(
+            {'message': 'Relance supprimée.'},
+            status=status.HTTP_204_NO_CONTENT
+        )
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+#  4. ACTION "OK" — Appel effectué
+#     POST /api/relances/<pk>/ok/
+#
+#  Body (optionnel) :
+#  {
+#    "notes": "Prospect rappelé, intéressé — rappeler la semaine prochaine"
+#  }
+#
+#  Effets :
+#    • statut  → 'fait'
+#    • date_action → now()
+#    • Crée un HistoriqueEchange de type 'appel'
+# ──────────────────────────────────────────────────────────────────────────────
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def relance_action_ok(request, pk):
+    from django.utils import timezone
+
+    relance = get_object_or_404(Relance, pk=pk)
+
+    # Marquer comme fait
+    relance.statut      = 'fait'
+    relance.date_action = timezone.now()
+    relance.save()
+
+    # Créer une entrée dans l'historique des échanges
+    notes = request.data.get('notes', '')
+    commentaire_histo = (
+        f"Relance du {relance.date_relance.strftime('%d/%m/%Y')} effectuée. "
+        + (f"Notes : {notes}" if notes else "")
+    )
+    HistoriqueEchange.objects.create(
+        prospect     = relance.prospect,
+        type_echange = 'appel',
+        utilisateur  = request.user,
+        contenu      = commentaire_histo,
+        notes        = notes,
+    )
+
+    return Response(
+        {
+            'message':  'Relance marquée comme effectuée.',
+            'relance':  RelanceSerializer(relance).data,
+        },
+        status=status.HTTP_200_OK
+    )
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+#  5. COMPTEUR DE RELANCES DU JOUR  (pour la navbar)
+#     GET /api/relances/count-today/
+# ──────────────────────────────────────────────────────────────────────────────
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def relances_count_today(request):
+    from datetime import date
+    today = date.today()
+    count = Relance.objects.filter(
+        date_relance__lte=today
+    ).exclude(statut='fait').count()
+    return Response({'count': count})
