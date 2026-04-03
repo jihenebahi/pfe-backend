@@ -8,7 +8,6 @@ from django.shortcuts import get_object_or_404
 from .models import Prospect, HistoriqueEchange, Relance
 from django.utils import timezone
 
-from .models import Prospect, HistoriqueEchange
 from .serializers import (
     ProspectSerializer,
     ProspectListSerializer,
@@ -223,8 +222,63 @@ def import_prospects_excel(request):
     }
     """
     import openpyxl
+    import re
     from django.core.exceptions import ValidationError
     from django.core.validators import validate_email
+    from formation.models import Formation
+
+    # ── Fonction de validation du téléphone tunisien ──
+    def validate_tunisian_phone(phone):
+        """
+        Valide un numéro de téléphone tunisien.
+        FORMAT ACCEPTÉ : 8 chiffres commençant par 2,4,5,7,9
+        
+        Accepte et nettoie :
+        - 55123456 (8 chiffres)
+        - 55123456.0 (avec .0 d'Excel)
+        - 21655123456 (avec indicatif 216)
+        - +21655123456 (avec +216)
+        - 0021655123456 (avec 00216)
+        - 055123456 (avec 0 initial)
+        - 55 123 456 (avec espaces)
+        """
+        if not phone:
+            return False, "Numéro de téléphone vide"
+        
+        # Convertir en string et nettoyer
+        phone_str = str(phone).strip()
+        
+        # Supprimer le .0 à la fin (format Excel)
+        if phone_str.endswith('.0') and phone_str[:-2].replace('.', '').isdigit():
+            phone_str = phone_str[:-2]
+        
+        # Supprimer le point décimal s'il reste
+        if '.' in phone_str and phone_str.replace('.', '').isdigit():
+            phone_str = phone_str.replace('.', '')
+        
+        # Nettoyer : garder uniquement les chiffres
+        cleaned = re.sub(r'[^\d]', '', phone_str)
+        
+        # Préfixes valides pour la Tunisie (mobile et fixe)
+        valid_prefixes = ['2', '4', '5', '7', '9']
+        
+        # CAS 1 : déjà 8 chiffres ET commence par un préfixe valide
+        if len(cleaned) == 8 and cleaned[0] in valid_prefixes:
+            return True, cleaned
+        
+        # CAS 2 : 9 chiffres avec 0 initial (0XXXXXXXX)
+        if len(cleaned) == 9 and cleaned[0] == '0' and cleaned[1] in valid_prefixes:
+            return True, cleaned[1:]
+        
+        # CAS 3 : 11 chiffres avec 216 (216XXXXXXXX)
+        if len(cleaned) == 11 and cleaned.startswith('216') and cleaned[3] in valid_prefixes:
+            return True, cleaned[3:]
+        
+        # CAS 4 : 13 chiffres avec 00216 (00216XXXXXXXX)
+        if len(cleaned) == 13 and cleaned.startswith('00216') and cleaned[5] in valid_prefixes:
+            return True, cleaned[5:]
+        
+        return False, "Numéro invalide. Format attendu : 8 chiffres commençant par 2,4,5,7 ou 9 (ex: 55123456 ou 21655123456)"
 
     # ── 1. Vérifier qu'un fichier a bien été envoyé ──
     if 'file' not in request.FILES:
@@ -266,6 +320,7 @@ def import_prospects_excel(request):
         'email':           'email',
         'telephone':       'telephone',
         'téléphone':       'telephone',
+        'tel':             'telephone',
         'ville':           'ville',
         'pays':            'pays',
         'source':          'source',
@@ -280,22 +335,28 @@ def import_prospects_excel(request):
         'niveau_etudes':   'niveau_etudes',
         'diplome':         'diplome_obtenu',
         'diplome_obtenu':  'diplome_obtenu',
+        'formations':      'formations_souhaitees',
+        'formations_souhaitees': 'formations_souhaitees',
     }
 
     # ── 6. Construire l'index des colonnes présentes dans CE fichier ──
-    # col_index = { 'champ_django': index_colonne }
     col_index = {}
     for idx, header in enumerate(headers):
         if header in COLUMN_MAP:
             col_index[COLUMN_MAP[header]] = idx
 
     # ── 7. Vérifier les colonnes obligatoires ──
-    # ✅ email retiré des colonnes obligatoires
-    required_fields = ['nom', 'prenom', 'telephone']
+    required_fields = ['nom', 'prenom', 'telephone', 'formations_souhaitees']
     missing = [f for f in required_fields if f not in col_index]
     if missing:
+        missing_display = []
+        for m in missing:
+            if m == 'formations_souhaitees':
+                missing_display.append('formations')
+            else:
+                missing_display.append(m)
         return Response(
-            {'error': f'Colonnes obligatoires manquantes : {", ".join(missing)}'},
+            {'error': f'Colonnes obligatoires manquantes : {", ".join(missing_display)}'},
             status=status.HTTP_400_BAD_REQUEST
         )
 
@@ -350,9 +411,47 @@ def import_prospects_excel(request):
         if field not in col_index:
             return ''
         cell = row[col_index[field]]
-        return str(cell.value).strip() if cell.value is not None else ''
+        if cell.value is not None:
+            value = str(cell.value).strip()
+            # ✅ NETTOYAGE : Supprimer le .0 à la fin (Excel number format)
+            if value.endswith('.0') and value[:-2].replace('.', '').isdigit():
+                value = value[:-2]
+            return value
+        return ''
 
-    # ── 10. Parcourir les lignes de données (à partir de la ligne 2) ──
+    # ── 10. Fonction pour obtenir les IDs des formations à partir des noms ──
+    def get_formation_ids(formations_str):
+        """Convertit une chaîne de noms de formations (séparés par des virgules ou points-virgules) en liste d'IDs."""
+        if not formations_str:
+            return [], []
+        
+        # Séparer par virgule ou point-virgule
+        formation_names = []
+        for sep in [',', ';', '|']:
+            if sep in formations_str:
+                formation_names = [name.strip() for name in formations_str.split(sep)]
+                break
+        if not formation_names:
+            formation_names = [formations_str.strip()]
+        
+        # Rechercher les formations par leur intitulé
+        formation_ids = []
+        missing_formations = []
+        
+        for name in formation_names:
+            if name:
+                try:
+                    formation = Formation.objects.get(intitule__iexact=name)
+                    formation_ids.append(formation.id)
+                except Formation.DoesNotExist:
+                    missing_formations.append(name)
+                except Formation.MultipleObjectsReturned:
+                    formation = Formation.objects.filter(intitule__iexact=name).first()
+                    formation_ids.append(formation.id)
+        
+        return formation_ids, missing_formations
+
+    # ── 11. Parcourir les lignes de données (à partir de la ligne 2) ──
     created_count = 0
     errors        = []
 
@@ -367,9 +466,19 @@ def import_prospects_excel(request):
         # Lecture des champs obligatoires
         nom       = get_val(row, 'nom')
         prenom    = get_val(row, 'prenom')
-        telephone = get_val(row, 'telephone')
+        telephone_raw = get_val(row, 'telephone')
+        formations_str = get_val(row, 'formations_souhaitees')
 
-        # ✅ email : lecture simple, pas obligatoire
+        # ✅ Validation du téléphone tunisien
+        telephone = ''
+        if telephone_raw:
+            is_valid, result = validate_tunisian_phone(telephone_raw)
+            if is_valid:
+                telephone = result  # On utilise le numéro normalisé sans indicatif
+            else:
+                row_errors.append(result)
+
+        # email : lecture simple, pas obligatoire
         email = get_val(row, 'email')
 
         # ── Validation des champs obligatoires ──
@@ -377,28 +486,38 @@ def import_prospects_excel(request):
             row_errors.append('Nom manquant')
         if not prenom:
             row_errors.append('Prénom manquant')
-        if not telephone:
+        if not telephone_raw:
             row_errors.append('Téléphone manquant')
+        elif not telephone:
+            # Si le téléphone a été fourni mais est invalide, l'erreur a déjà été ajoutée
+            pass
 
-        # ── Validation de l'email SEULEMENT s'il est fourni ──
-        # ✅ Si la cellule est vide → on passe, pas d'erreur
-        # ✅ Si la cellule contient quelque chose → on vérifie le format
+        # Validation du champ formations (obligatoire)
+        if not formations_str:
+            row_errors.append('Formations manquantes')
+        else:
+            formation_ids, missing_formations = get_formation_ids(formations_str)
+            if missing_formations:
+                row_errors.append(f'Formations non trouvées : {", ".join(missing_formations)}')
+            if not formation_ids:
+                row_errors.append('Aucune formation valide trouvée')
+
+        # Validation de l'email SEULEMENT s'il est fourni
         if email:
             try:
                 validate_email(email)
             except ValidationError:
                 row_errors.append(f'Format d\'email invalide : {email}')
 
-        # ── Unicité du téléphone ──
+        # Unicité du téléphone (normalisé)
         if telephone and Prospect.objects.filter(telephone=telephone).exists():
             row_errors.append(f'Téléphone déjà utilisé : {telephone}')
 
-        # ── Unicité de l'email (seulement s'il est fourni) ──
-        # ✅ On ne bloque que si l'email est renseigné ET déjà en base
+        # Unicité de l'email (seulement s'il est fourni)
         if email and Prospect.objects.filter(email=email).exists():
             row_errors.append(f'Email déjà utilisé : {email}')
 
-        # ── Mapping des champs avec choix ──
+        # Mapping des champs avec choix
         ville    = get_val(row, 'ville')
         pays     = PAYS_MAP.get(get_val(row, 'pays').lower(),         'tunisie')
         source   = SOURCE_MAP.get(get_val(row, 'source').lower(),     'autre')
@@ -409,24 +528,34 @@ def import_prospects_excel(request):
         niv_etd  = NIVEAU_ETUDES_MAP.get(get_val(row, 'niveau_etudes').lower(), '')
         diplome  = DIPLOME_MAP.get(get_val(row, 'diplome_obtenu').lower(), '')
 
-        # ── Date de naissance (optionnelle) ──
+        # Date de naissance (optionnelle)
         date_naissance = None
         ddn_raw = get_val(row, 'date_naissance')
         if ddn_raw:
             from datetime import datetime
-            for fmt in ['%Y-%m-%d', '%d/%m/%Y', '%d-%m-%Y']:
+            
+            # Nettoyage : ne garder que la partie date (avant l'espace)
+            if ' ' in ddn_raw:
+                ddn_raw = ddn_raw.split(' ')[0]
+            
+            # Supprimer les guillemets ou apostrophes
+            ddn_raw = ddn_raw.strip('\'"')
+            
+            # Essayer plusieurs formats
+            date_naissance = None
+            for fmt in ['%Y-%m-%d', '%d/%m/%Y', '%d-%m-%Y', '%Y/%m/%d']:
                 try:
                     date_naissance = datetime.strptime(ddn_raw, fmt).date()
                     break
                 except ValueError:
                     continue
+            
             if not date_naissance:
                 row_errors.append(
                     f'Date de naissance invalide : {ddn_raw} '
                     f'(formats acceptés : JJ/MM/AAAA ou AAAA-MM-JJ)'
                 )
-
-        # ── Si des erreurs → on enregistre et on passe à la ligne suivante ──
+                        # Si des erreurs → on enregistre et on passe à la ligne suivante
         if row_errors:
             errors.append({
                 'ligne':   row_num,
@@ -435,13 +564,13 @@ def import_prospects_excel(request):
             })
             continue
 
-        # ── Création du prospect ──
+        # Création du prospect
         try:
-            Prospect.objects.create(
+            prospect = Prospect.objects.create(
                 nom            = nom,
                 prenom         = prenom,
-                email          = email,        # ✅ peut être '' si non fourni
-                telephone      = telephone,
+                email          = email,
+                telephone      = telephone,  # Utiliser le numéro normalisé
                 ville          = ville,
                 pays           = pays,
                 source         = source,
@@ -455,6 +584,12 @@ def import_prospects_excel(request):
                 commentaires   = get_val(row, 'commentaires'),
                 responsable    = request.user,
             )
+            
+            # Ajouter les formations
+            formation_ids, _ = get_formation_ids(formations_str)
+            if formation_ids:
+                prospect.formations_souhaitees.set(formation_ids)
+            
             created_count += 1
 
         except Exception as e:
@@ -464,30 +599,12 @@ def import_prospects_excel(request):
                 'erreurs': [str(e)],
             })
 
-    # ── 11. Rapport final ──
+    # ── 12. Rapport final ──
     return Response({
         'created': created_count,
         'errors':  errors,
         'total':   created_count + len(errors),
     }, status=status.HTTP_200_OK)
-
-
-# ──────────────────────────────────────────────────────────────────────────────
-#  À AJOUTER à la fin de  prospects/views.py
-#  (+ ajouter les imports ci-dessous en haut du fichier)
-# ──────────────────────────────────────────────────────────────────────────────
-#
-#  Imports à ajouter en haut de views.py :
-#
-#  from .models      import Prospect, HistoriqueEchange, Relance
-#  from .serializers import (
-#      ...,                        # imports existants
-#      RelanceSerializer,
-#      RelanceCreateSerializer,
-#  )
-#  from django.utils import timezone
-#
-# ──────────────────────────────────────────────────────────────────────────────
 
 
 # ──────────────────────────────────────────────────────────────────────────────
