@@ -17,24 +17,30 @@ class Formation(models.Model):
 
     intitule = models.CharField(max_length=255)
 
-    # 🔥 AJOUT DE LA CATEGORIE ICI
     categorie = models.ForeignKey(
-        'categories.Categorie',   # nom_app.NomModel
+        'categories.Categorie',
         on_delete=models.CASCADE,
         related_name='formations'
     )
 
     formateurs = models.ManyToManyField(
-    'formateurs.Formateur',
-    related_name='formations',
-    blank=True
+        'formateurs.Formateur',
+        related_name='formations',
+        blank=True
     )
 
     description = models.TextField(blank=True, default='')
     objectifs_pedagogiques = models.TextField()
     prerequis = models.TextField(blank=True, null=True)
 
-    niveau = models.CharField(max_length=20, choices=NIVEAU_CHOICES)
+    # ✅ niveau est maintenant optionnel (blank=True, null=True)
+    niveau = models.CharField(
+        max_length=20,
+        choices=NIVEAU_CHOICES,
+        blank=True,
+        null=True
+    )
+
     duree = models.PositiveIntegerField(help_text="Durée totale en heures")
 
     format = models.CharField(max_length=20, choices=FORMAT_CHOICES)
@@ -44,8 +50,7 @@ class Formation(models.Model):
 
     prix_ht = models.DecimalField(max_digits=10, decimal_places=2)
     prix_ttc = models.DecimalField(max_digits=10, decimal_places=2)
-    
-    # ✅ NOUVEAU CHAMP : Nombre de tranches de paiement
+
     nb_tranches_paiement = models.PositiveIntegerField(
         default=1,
         help_text="Nombre de tranches pour le paiement (1 = paiement unique)"

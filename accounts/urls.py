@@ -12,6 +12,7 @@ urlpatterns = [
     path('users/',                              views.list_users,         name='list_users'),
     path('users/create/',                       views.create_user,        name='create_user'),
     path('users/<int:user_id>/',               views.get_user_detail,    name='get_user_detail'),
+    path('users/<int:user_id>/update/',        views.update_user,        name='update_user'),       # ✅ NOUVEAU
     path('users/<int:user_id>/toggle-status/', views.toggle_user_status, name='toggle_user_status'),
     path('users/<int:user_id>/delete/',        views.delete_user,        name='delete_user'),
 
