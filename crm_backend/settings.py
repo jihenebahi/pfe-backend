@@ -29,6 +29,8 @@ INSTALLED_APPS = [
     'prospects',
     'etudiants',
     'core',
+    'marketing_mail',
+    'diplomes',
 
 ]
 
