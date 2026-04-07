@@ -1,6 +1,6 @@
 # prospects/serializers.py
 from rest_framework import serializers
-from .models import Prospect, HistoriqueEchange
+from .models import Prospect, HistoriqueEchange, Relance
 from formation.models import Formation
 
 
@@ -69,9 +69,6 @@ class ProspectCreateUpdateSerializer(serializers.ModelSerializer):
     formations_souhaitees = serializers.PrimaryKeyRelatedField(
         many=True, queryset=Formation.objects.all(), required=False)
 
-    # ✅ MODIFIÉ : email rendu explicitement optionnel dans le serializer.
-    # required=False → l'API n'exige plus ce champ dans le body.
-    # allow_blank=True → une chaîne vide '' est acceptée sans erreur.
     email = serializers.EmailField(required=False, allow_blank=True, default='')
 
     class Meta:
@@ -96,32 +93,34 @@ class ProspectCreateUpdateSerializer(serializers.ModelSerializer):
         if formations is not None:
             instance.formations_souhaitees.set(formations)
         return instance
-    
-# ──────────────────────────────────────────────────────────────────────────────
-#  À AJOUTER à la fin de  prospects/serializers.py
-# ──────────────────────────────────────────────────────────────────────────────
 
-from .models import Relance   # ← ajouter Relance à l'import existant
 
+# ──────────────────────────────────────────────────────────────────────────────
 
 class RelanceSerializer(serializers.ModelSerializer):
     """Serializer complet — utilisé pour le détail et la liste dashboard."""
 
-    statut_calcule  = serializers.CharField(read_only=True)
-    created_by_nom  = serializers.CharField(
+    statut_calcule     = serializers.CharField(read_only=True)
+    created_by_nom     = serializers.CharField(
         source='created_by.username', read_only=True, default=None
     )
 
-    # Infos prospect dénormalisées pour le dashboard (lecture seule)
-    prospect_nom      = serializers.CharField(source='prospect.nom',       read_only=True)
-    prospect_prenom   = serializers.CharField(source='prospect.prenom',    read_only=True)
+    # Infos prospect dénormalisées
+    prospect_nom       = serializers.CharField(source='prospect.nom',       read_only=True)
+    prospect_prenom    = serializers.CharField(source='prospect.prenom',    read_only=True)
     prospect_telephone = serializers.CharField(source='prospect.telephone', read_only=True)
+
+    # ✅ CORRECTION : formation_nom ajouté
+    formation_nom      = serializers.CharField(
+        source='formation.intitule', read_only=True, default=None
+    )
 
     class Meta:
         model  = Relance
         fields = [
             'id',
             'prospect', 'prospect_nom', 'prospect_prenom', 'prospect_telephone',
+            'formation', 'formation_nom',          # ✅ les deux champs ajoutés
             'date_relance', 'commentaire',
             'statut', 'statut_calcule',
             'date_action', 'created_by', 'created_by_nom',
@@ -135,6 +134,5 @@ class RelanceCreateSerializer(serializers.ModelSerializer):
 
     class Meta:
         model  = Relance
-        fields = ['id', 'date_relance', 'commentaire', 'statut']
+        fields = ['id', 'date_relance', 'commentaire', 'statut', 'formation']  # ✅ formation ajouté
         read_only_fields = []
-        

@@ -622,7 +622,7 @@ def all_relances(request):
     from django.utils import timezone
     from datetime import date
 
-    relances = Relance.objects.select_related('prospect', 'created_by').all()
+    relances = Relance.objects.select_related('prospect', 'created_by', 'formation').all()
 
     statut_filter = request.query_params.get('statut')
     today = date.today()
@@ -654,16 +654,21 @@ def relance_list_create(request, prospect_pk):
     prospect = get_object_or_404(Prospect, pk=prospect_pk)
 
     if request.method == 'GET':
-        relances   = prospect.relances.all()
+        relances   = prospect.relances.select_related('formation').all()
         serializer = RelanceSerializer(relances, many=True)
         return Response(serializer.data)
 
     elif request.method == 'POST':
         serializer = RelanceCreateSerializer(data=request.data)
         if serializer.is_valid():
+            # Si formation non fournie, utiliser la 1ère formation du prospect
+            formation = serializer.validated_data.get('formation')
+            if not formation:
+                formation = prospect.formations_souhaitees.first()
             relance = serializer.save(
                 prospect=prospect,
                 created_by=request.user,
+                formation=formation,
             )
             return Response(
                 RelanceSerializer(relance).data,

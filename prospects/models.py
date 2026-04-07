@@ -136,6 +136,13 @@ class Relance(models.Model):
     prospect     = models.ForeignKey(
         Prospect, on_delete=models.CASCADE, related_name='relances'
     )
+    formation = models.ForeignKey(
+        'formation.Formation', 
+        on_delete=models.SET_NULL, 
+        null=True, 
+        blank=True,
+        related_name='relances'
+    )
     date_relance = models.DateField()
     commentaire  = models.TextField(blank=True)
 
