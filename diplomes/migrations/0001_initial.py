@@ -27,12 +27,18 @@ class Migration(migrations.Migration):
                 ('formation_intitule', models.CharField(blank=True, max_length=255)),
                 ('formation_duree', models.CharField(blank=True, max_length=50)),
                 ('date_attestation', models.DateField(help_text="Date figurant sur l'attestation")),
-                ('seances_total', models.PositiveIntegerField(default=0, help_text='Nombre total de séances dans la formation')),
-                ('absences', models.PositiveIntegerField(default=0, help_text='Nombre de séances manquées')),
-                ('etudiant_id_origine', models.IntegerField(blank=True, help_text="ID de l'étudiant au moment de la certification (référence historique)", null=True)),
+                ('seances_total', models.PositiveIntegerField(default=0)),
+                ('absences', models.PositiveIntegerField(default=0)),
+                ('etudiant_id_origine', models.IntegerField(blank=True, null=True)),
                 ('date_creation', models.DateTimeField(auto_now_add=True)),
                 ('date_modification', models.DateTimeField(auto_now=True)),
-                ('formation', models.ForeignKey(blank=True, help_text='FK vers la formation (peut devenir null si la formation est supprimée)', null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='diplomes', to='formation.formation')),
+                ('formation', models.ForeignKey(
+                    blank=True,
+                    null=True,
+                    on_delete=django.db.models.deletion.SET_NULL,
+                    related_name='diplomes',
+                    to='formation.formation'
+                )),
             ],
             options={
                 'verbose_name': 'Diplômé',
