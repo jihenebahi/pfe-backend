@@ -16,14 +16,20 @@ urlpatterns = [
     # Archiver plusieurs emails
     path('archiver/', views.archiver_emails, name='marketing-mail-archiver'),
     
-    # Estimer le nombre de destinataires
+    # Supprimer plusieurs emails
+    path('supprimer/', views.supprimer_emails, name='marketing-mail-supprimer'),
+    
+    # Estimer le nombre de destinataires (retourne aussi la liste)
     path('estimer/', views.estimer_destinataires, name='marketing-mail-estimer'),
     
     # Liste des formations (pour les chips)
     path('formations/', views.liste_formations_marketing, name='marketing-mail-formations'),
     
-    # Liste des formations par type de groupe
+    # Liste des formations par type de groupe (avec comptage)
     path('formations/<str:type_groupe>/', views.liste_formations_par_type, name='marketing-mail-formations-par-type'),
+    
+    # Liste des statuts disponibles en fonction des formations
+    path('statuts/', views.liste_statuts_par_formations, name='marketing-mail-statuts'),
     
     # Debug
     path('debug/', views.debug_emails, name='marketing-mail-debug'),
