@@ -136,6 +136,14 @@ def prospect_stats(request):
 # ──────────────────────────────────────────────
 #  CONVERSION PROSPECT → ÉTUDIANT
 # ──────────────────────────────────────────────
+# prospects/views.py
+
+from django.core.mail import send_mail
+from django.conf import settings
+import logging
+
+logger = logging.getLogger(__name__)
+
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def convert_to_etudiant(request, pk):
@@ -163,6 +171,7 @@ def convert_to_etudiant(request, pk):
     notes             = request.data.get('notes', '')
     documents_fournis = request.data.get('documents_fournis', [])
 
+    # Création de l'étudiant
     etudiant = Etudiant(
         nom            = prospect.nom,
         prenom         = prospect.prenom,
@@ -181,6 +190,7 @@ def convert_to_etudiant(request, pk):
     )
     etudiant.save()
 
+    # Documents
     for doc in documents_fournis:
         doc_type = DOCUMENT_TYPE_MAP.get(doc, 'autre')
         Document.objects.create(
@@ -190,19 +200,65 @@ def convert_to_etudiant(request, pk):
             commentaire=f"Document fourni en version physique : {doc}"
         )
 
+    # Récupération des formations
     if formations_ids:
         formations = Formation.objects.filter(id__in=formations_ids)
-        etudiant.formations_suivies.set(formations)
     else:
-        etudiant.formations_suivies.set(prospect.formations_souhaitees.all())
+        formations = prospect.formations_souhaitees.all()
 
+    if formations.exists():
+        etudiant.formations_suivies.set(formations)
+
+    # ─────────────────────────────────────────────────────────────
+    # ENVOI D'EMAIL DE BIENVENUE (un email par formation)
+    # ─────────────────────────────────────────────────────────────
+    subject = "Bienvenue au centre de formation 4C Lab"
+
+    for formation in formations:
+        # Construction du nom complet
+        nom_complet = f"{etudiant.prenom} {etudiant.nom}".strip()
+
+        # Formatage de la date de début
+        if formation.date_debut:
+            date_formatee = formation.date_debut.strftime("%d %B %Y")
+        else:
+            date_formatee = "prochainement"
+
+        # Message exact selon votre demande
+        message = f"""Bonjour {nom_complet},
+
+Bienvenue au centre de formation 4C Lab.
+Nous sommes ravis de vous compter parmi nos étudiants.
+
+Nous avons le plaisir de vous informer que votre formation « {formation.intitule} » débutera le {date_formatee}.
+Nous vous invitons à vous préparer pour une expérience d'apprentissage enrichissante et dynamique.
+
+Notre équipe pédagogique vous accompagnera tout au long de votre parcours afin de vous garantir une formation de qualité.
+
+Nous vous souhaitons une excellente réussite dans votre formation.
+
+Cordialement,
+L'équipe 4C Lab"""
+
+        try:
+            send_mail(
+                subject,
+                message,
+                settings.DEFAULT_FROM_EMAIL,
+                [etudiant.email],
+                fail_silently=False,
+            )
+            logger.info(f"Email de bienvenue envoyé à {etudiant.email} pour la formation {formation.intitule}")
+        except Exception as e:
+            logger.error(f"Erreur lors de l'envoi de l'email à {etudiant.email} : {str(e)}")
+
+    # Suppression du prospect
     prospect.delete()
 
     return Response(
         {'message': 'Prospect converti en étudiant avec succès.', 'etudiant_id': etudiant.id},
         status=status.HTTP_201_CREATED
     )
-
 
 # ──────────────────────────────────────────────
 #  IMPORT EXCEL

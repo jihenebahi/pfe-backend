@@ -1,19 +1,10 @@
 # etudiants/serializers.py
 from rest_framework import serializers
-from .models import Etudiant, EtudiantFormation, Document
+from .models import Etudiant, EtudiantFormation, Document, EtudiantRelance
 from formation.models import Formation
 
 
-# ──────────────────────────────────────────────────────────────────
-#  Formation légère (pour le champ formations_suivies_detail)
-# ──────────────────────────────────────────────────────────────────
-
 class EtudiantFormationSerializer(serializers.ModelSerializer):
-    """
-    Expose les données du through model EtudiantFormation :
-    - champs de la formation (id, intitule, duree, format, niveau)
-    - champs propres à l'inscription (date, attestation, date_attestation)
-    """
     id       = serializers.IntegerField(source='formation.id',       read_only=True)
     intitule = serializers.CharField(source='formation.intitule',    read_only=True)
     duree    = serializers.SerializerMethodField()
@@ -32,10 +23,6 @@ class EtudiantFormationSerializer(serializers.ModelSerializer):
         ]
 
 
-# ──────────────────────────────────────────────────────────────────
-#  Document
-# ──────────────────────────────────────────────────────────────────
-
 class DocumentSerializer(serializers.ModelSerializer):
     type_display = serializers.CharField(
         source='get_type_document_display', read_only=True
@@ -48,9 +35,60 @@ class DocumentSerializer(serializers.ModelSerializer):
         read_only_fields = ['date_upload']
 
 
-# ──────────────────────────────────────────────────────────────────
-#  Lecture complète d'un étudiant
-# ──────────────────────────────────────────────────────────────────
+# ──────────────────────────────────────────────────────────────────────────────
+#  SERIALIZER POUR LES RELANCES ÉTUDIANTS
+# ──────────────────────────────────────────────────────────────────────────────
+# etudiants/serializers.py
+
+class EtudiantRelanceSerializer(serializers.ModelSerializer):
+    """Serializer complet pour les relances étudiants"""
+
+    statut_calcule = serializers.CharField(read_only=True)
+    created_by_nom = serializers.CharField(
+        source='created_by.username', read_only=True, default=None
+    )
+    
+    # NOUVEAU
+    notes_action = serializers.CharField(read_only=True)
+
+    # Infos étudiant dénormalisées
+    etudiant_nom = serializers.CharField(source='etudiant.nom', read_only=True)
+    etudiant_prenom = serializers.CharField(source='etudiant.prenom', read_only=True)
+    etudiant_telephone = serializers.CharField(source='etudiant.telephone', read_only=True)
+    etudiant_email = serializers.CharField(source='etudiant.email', read_only=True)
+
+    formation_nom = serializers.CharField(
+        source='formation.intitule', read_only=True, default=None
+    )
+
+    class Meta:
+        model = EtudiantRelance
+        fields = [
+            'id',
+            'etudiant', 'etudiant_nom', 'etudiant_prenom', 
+            'etudiant_telephone', 'etudiant_email',
+            'formation', 'formation_nom',
+            'date_relance', 'commentaire',
+            'statut', 'statut_calcule',
+            'date_action', 'notes_action',  # ← AJOUTÉ notes_action
+            'created_by', 'created_by_nom',
+            'date_creation',
+        ]
+        read_only_fields = ['date_action', 'date_creation', 'created_by', 'notes_action']
+
+
+class EtudiantRelanceCreateSerializer(serializers.ModelSerializer):
+    """Serializer allégé pour la création / mise à jour"""
+
+    class Meta:
+        model  = EtudiantRelance
+        fields = ['id', 'date_relance', 'commentaire', 'statut', 'formation']
+        read_only_fields = []
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+#  SERIALIZER PRINCIPAL ÉTUDIANT (sans prospect_id)
+# ──────────────────────────────────────────────────────────────────────────────
 
 class EtudiantSerializer(serializers.ModelSerializer):
     formations_noms     = serializers.CharField(read_only=True)
@@ -59,17 +97,18 @@ class EtudiantSerializer(serializers.ModelSerializer):
         source='responsable.username', read_only=True, default=None
     )
 
-    # IDs bruts (pour les filtres / formulaire React)
     formations_suivies  = serializers.PrimaryKeyRelatedField(
         many=True, read_only=True
     )
 
-    # Données enrichies par formation (via through model)
     formations_suivies_detail = EtudiantFormationSerializer(
         source='etudiant_formations', many=True, read_only=True
     )
 
     documents = DocumentSerializer(many=True, read_only=True)
+    
+    # Relances de l'étudiant
+    relances = EtudiantRelanceSerializer(many=True, read_only=True)
 
     class Meta:
         model  = Etudiant
@@ -80,21 +119,13 @@ class EtudiantSerializer(serializers.ModelSerializer):
             'formations_suivies', 'formations_suivies_detail', 'formations_noms',
             'date_inscription', 'statut', 'mode_paiement',
             'responsable', 'responsable_nom',
-            'notes', 'documents',
+            'notes', 'documents', 'relances',  # ← relances ajoutées
             'date_creation', 'date_modification',
         ]
         read_only_fields = ['date_inscription', 'date_creation', 'date_modification']
 
 
-# ──────────────────────────────────────────────────────────────────
-#  Création / mise à jour
-# ──────────────────────────────────────────────────────────────────
-
 class EtudiantCreateUpdateSerializer(serializers.ModelSerializer):
-    """
-    Désérialise les IDs de formations, puis gère manuellement
-    la table de liaison EtudiantFormation (through model).
-    """
     formations_suivies = serializers.PrimaryKeyRelatedField(
         many=True,
         queryset=Formation.objects.all(),
@@ -112,8 +143,6 @@ class EtudiantCreateUpdateSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['date_inscription', 'date_creation', 'date_modification']
         extra_kwargs = {
-            # ── CORRECTION : tous les champs optionnels marqués required=False ──
-            # Cela évite les erreurs 400 lors d'un PATCH partiel
             'responsable':    {'required': False},
             'statut':         {'required': False},
             'mode_paiement':  {'required': False},
@@ -149,12 +178,10 @@ class EtudiantCreateUpdateSerializer(serializers.ModelSerializer):
             )
             new_ids = set(f.id for f in formations)
 
-            # Supprimer les formations retirées
             instance.etudiant_formations.filter(
                 formation_id__in=current_ids - new_ids
             ).delete()
 
-            # Ajouter les nouvelles formations
             for formation in formations:
                 if formation.id not in current_ids:
                     EtudiantFormation.objects.create(

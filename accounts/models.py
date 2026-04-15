@@ -16,7 +16,7 @@ class User(AbstractUser):
         #('etudiant', 'Étudiant'),
     )
 
-    role = models.CharField(max_length=20, choices=ROLE_CHOICES, default='etudiant')
+    role = models.CharField(max_length=20, choices=ROLE_CHOICES)
     phone = models.CharField(max_length=20, blank=True)
     email_verified = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)

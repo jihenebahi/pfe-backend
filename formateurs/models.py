@@ -46,8 +46,7 @@ class Formateur(models.Model):
     ]
     type_contrat = models.CharField(max_length=20, choices=TYPE_CONTRAT_CHOICES)
 
-    # ✅ Supprimé : disponibilites (obligatoire → plantait le formulaire)
-    # ✅ Supprimé : heures_realisees (non utilisé dans le formulaire)
+
 
     # CV — fichier unique (inchangé)
     cv_pdf = models.FileField(

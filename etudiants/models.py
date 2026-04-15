@@ -3,6 +3,7 @@ from django.db import models
 from django.contrib.auth import get_user_model
 from core.models import PersonneBase
 from formation.models import Formation
+from datetime import date
 
 User = get_user_model()
 
@@ -25,7 +26,6 @@ class Etudiant(PersonneBase):
         ('virement', 'Virement'),
     ]
 
-    # Formations (plusieurs possibles) — via through model EtudiantFormation
     formations_suivies = models.ManyToManyField(
         Formation,
         through='EtudiantFormation',
@@ -53,7 +53,7 @@ class Etudiant(PersonneBase):
     date_modification = models.DateTimeField(auto_now=True)
 
     class Meta:
-        ordering            = ['-date_inscription', '-date_creation']  # ← ajouter date_creation
+        ordering            = ['-date_inscription', '-date_creation']
         verbose_name        = "Étudiant"
         verbose_name_plural = "Étudiants"
 
@@ -70,11 +70,6 @@ class Etudiant(PersonneBase):
 
 
 class EtudiantFormation(models.Model):
-    """
-    Table de liaison Etudiant ↔ Formation avec champs complémentaires :
-    - date d'inscription spécifique à chaque formation
-    - statut d'attestation par formation
-    """
     etudiant  = models.ForeignKey(
         Etudiant, on_delete=models.CASCADE,
         related_name='etudiant_formations'
@@ -100,9 +95,6 @@ class EtudiantFormation(models.Model):
 
 
 class Document(models.Model):
-    """
-    Documents fournis par l'étudiant (CIN, CV, Contrat, Reçu, RNE, Autre).
-    """
     TYPE_CHOICES = [
         ('cin',     'CIN'),
         ('cv',      'CV'),
@@ -132,3 +124,80 @@ class Document(models.Model):
 
     def __str__(self):
         return f"{self.get_type_document_display()} — {self.etudiant.nom_complet}"
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+#  NOUVEAU : Table de relances pour les étudiants
+# ──────────────────────────────────────────────────────────────────────────────
+
+# etudiants/models.py
+
+class EtudiantRelance(models.Model):
+    """
+    Représente une relance programmée pour un étudiant.
+    Totalement indépendante des relances des prospects.
+    """
+
+    STATUT_CHOICES = [
+        ('a_venir',     'À venir'),
+        ('aujourd_hui', "Aujourd'hui"),
+        ('en_retard',   'En retard'),
+        ('fait',        'Fait'),
+    ]
+
+    etudiant = models.ForeignKey(
+        Etudiant, 
+        on_delete=models.CASCADE, 
+        related_name='relances'
+    )
+    formation = models.ForeignKey(
+        'formation.Formation', 
+        on_delete=models.SET_NULL, 
+        null=True, 
+        blank=True,
+        related_name='relances_etudiants'
+    )
+    date_relance = models.DateField()
+    commentaire = models.TextField(blank=True)
+
+    # Statut persisté
+    statut = models.CharField(
+        max_length=20, choices=STATUT_CHOICES, default='a_venir'
+    )
+
+    # Rempli quand l'utilisateur clique « OK »
+    date_action = models.DateTimeField(null=True, blank=True)
+    
+    # NOUVEAU : Notes saisies lors de l'appel effectué
+    notes_action = models.TextField(blank=True, default='')
+
+    created_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, related_name='relances_etudiants_creees'
+    )
+    date_creation = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['date_relance']
+        verbose_name = "Relance étudiant"
+        verbose_name_plural = "Relances étudiants"
+
+    def __str__(self):
+        return f"Relance {self.etudiant} — {self.date_relance}"
+
+    @property
+    def statut_calcule(self):
+        """
+        Priorité :
+          1. 'fait'         → toujours 'fait'
+          2. date < today   → 'en_retard'
+          3. date = today   → 'aujourd_hui'
+          4. date > today   → 'a_venir'
+        """
+        if self.statut == 'fait':
+            return 'fait'
+        today = date.today()
+        if self.date_relance < today:
+            return 'en_retard'
+        if self.date_relance == today:
+            return 'aujourd_hui'
+        return 'a_venir'
