@@ -65,19 +65,18 @@ TEMPLATES = [
 WSGI_APPLICATION = 'crm_backend.wsgi.application'
 
 
-# Database - MySQL
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.mysql',
         'NAME': 'crm_formation_db',
-        'USER': 'root',
-        'PASSWORD': '',
+        'USER': 'root',  # ou votre nom d'utilisateur
+        'PASSWORD': '',  # votre mot de passe (laissez vide si pas de mot de passe)
         'HOST': 'localhost',
         'PORT': '3306',
         'OPTIONS': {
-            'init_command': "SET sql_mode='STRICT_TRANS_TABLES'",
             'charset': 'utf8mb4',
-        }
+            'init_command': "SET sql_mode='STRICT_TRANS_TABLES'",
+        },
     }
 }
 

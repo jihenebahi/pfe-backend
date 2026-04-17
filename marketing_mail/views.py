@@ -1,4 +1,4 @@
-# marketing_mail/views.py - VERSION CORRIGÉE AVEC FILTRE DATE UNIQUE
+# marketing_mail/views.py - VERSION CORRIGÉE POUR LES DIPLÔMÉS
 
 import json
 from rest_framework.decorators import api_view, permission_classes, parser_classes
@@ -76,7 +76,8 @@ def get_destinataires_segment(groupe, formations_ids, statuts, sources):
             })
 
     elif groupe == 'Diplômés':
-        qs = Diplome.objects.filter(statut='delivre').exclude(email__isnull=True).exclude(email='')
+        # CORRECTION: Supprimer le filtre statut='delivre' qui n'existe pas
+        qs = Diplome.objects.exclude(email__isnull=True).exclude(email='')
         if formations_ids:
             qs = qs.filter(formation__id__in=formations_ids)
         
@@ -91,7 +92,7 @@ def get_destinataires_segment(groupe, formations_ids, statuts, sources):
                 'telephone': d.telephone or "—",
                 'formation': d.formation.intitule if d.formation else "—",
                 'statut': "Diplômé",
-                'date_inscription': d.date_obtention.strftime('%d/%m/%Y') if d.date_obtention else "—"
+                'date_inscription': d.date_attestation.strftime('%d/%m/%Y') if d.date_attestation else "—"
             })
 
     return result
@@ -159,8 +160,8 @@ def get_formations_par_type_avec_comptage(type_groupe, formations_ids=None):
         return formations_data
         
     elif type_groupe == 'diplomes':
+        # CORRECTION: Récupérer les IDs des formations qui ont au moins un diplômé avec email
         formations_avec_diplomes_ids = Diplome.objects.filter(
-            statut='delivre',
             formation__isnull=False
         ).exclude(
             email__isnull=True
@@ -175,8 +176,7 @@ def get_formations_par_type_avec_comptage(type_groupe, formations_ids=None):
         
         for f in formations_avec_diplomes:
             count = Diplome.objects.filter(
-                formation__id=f.id,
-                statut='delivre'
+                formation__id=f.id
             ).exclude(email__isnull=True).exclude(email='').count()
             
             if count > 0:
@@ -278,7 +278,7 @@ def liste_emails(request):
     archive = request.query_params.get('archive', 'false').lower() == 'true'
     groupe = request.query_params.get('groupe', '')
     search = request.query_params.get('search', '')
-    date_unique = request.query_params.get('date_unique', '')  # CHANGÉ: un seul paramètre
+    date_unique = request.query_params.get('date_unique', '')
     direct = request.query_params.get('direct', 'false').lower() == 'true'
 
     print(f"🔍 FILTRES REÇUS: archive={archive}, groupe={groupe}, search={search}, date_unique={date_unique}, direct={direct}")
@@ -286,20 +286,18 @@ def liste_emails(request):
     qs = MarketingEmail.objects.select_related('envoye_par').prefetch_related('formations_cibles')
     qs = qs.filter(est_archive=archive)
 
-    # Filtrer par mode direct
     if direct:
         qs = qs.filter(send_mode='direct')
     
     if groupe:
         qs = qs.filter(groupe=groupe)
     if search:
-        qs = qs.filter(Q(objet__icontains=search) | Q(envoye_par__email__icontains=search))
+        qs = qs.filter(objet__icontains=search) | qs.filter(envoye_par__email__icontains=search)
     
-    # FILTRE DATE UNIQUE — plage datetime avec timezone pour éviter le décalage UTC
     if date_unique and date_unique != 'Invalid Date' and len(date_unique) == 10:
         try:
-            from datetime import datetime, time as dt_time
             from django.utils import timezone as dj_timezone
+            from datetime import datetime, time as dt_time
 
             date_obj = datetime.strptime(date_unique, "%Y-%m-%d").date()
             tz = dj_timezone.get_current_timezone()
@@ -312,7 +310,7 @@ def liste_emails(request):
             )
 
             qs = qs.filter(date_envoi__range=(debut_journee, fin_journee))
-            print(f"📅 Filtre date: {date_obj} → [{debut_journee} ... {fin_journee}]")
+            print(f"📅 Filtre date: {date_obj}")
         except (ValueError, TypeError) as e:
             print(f"❌ Erreur parsing date: {e}")
 
@@ -331,10 +329,8 @@ def creer_envoyer_email(request):
     print("request.FILES:", request.FILES)
     print("=" * 50)
     
-    # Récupérer les données
     data = {}
     
-    # Extraire les champs simples
     data['send_mode'] = request.data.get('send_mode', 'segment')
     data['objet'] = request.data.get('objet', '')
     data['apercu'] = request.data.get('apercu', '')
@@ -345,7 +341,6 @@ def creer_envoyer_email(request):
     else:
         data['groupe'] = request.data.get('groupe', '')
         
-        # Extraire formations_cibles
         formations_raw = request.data.get('formations_cibles', '[]')
         if isinstance(formations_raw, str):
             try:
@@ -355,7 +350,6 @@ def creer_envoyer_email(request):
         else:
             data['formations_cibles'] = formations_raw if isinstance(formations_raw, list) else []
         
-        # Extraire statuts_prospects
         statuts_raw = request.data.get('statuts_prospects', '[]')
         if isinstance(statuts_raw, str):
             try:
@@ -365,7 +359,6 @@ def creer_envoyer_email(request):
         else:
             data['statuts_prospects'] = statuts_raw if isinstance(statuts_raw, list) else []
         
-        # Extraire sources_prospects
         sources_raw = request.data.get('sources_prospects', '[]')
         if isinstance(sources_raw, str):
             try:
@@ -375,7 +368,6 @@ def creer_envoyer_email(request):
         else:
             data['sources_prospects'] = sources_raw if isinstance(sources_raw, list) else []
         
-        # Récupérer les emails sélectionnés
         emails_selected_raw = request.data.get('emails_selected', '[]')
         if isinstance(emails_selected_raw, str):
             try:
@@ -390,7 +382,6 @@ def creer_envoyer_email(request):
     
     fichier = request.FILES.get('fichier', None)
     
-    # Créer l'objet MarketingEmail
     try:
         marketing_email = MarketingEmail.objects.create(
             envoye_par=request.user,
@@ -405,7 +396,6 @@ def creer_envoyer_email(request):
             fichier=fichier
         )
         
-        # Ajouter les formations
         formations_ids = data.get('formations_cibles', [])
         if formations_ids:
             formations = Formation.objects.filter(id__in=formations_ids)
@@ -417,7 +407,6 @@ def creer_envoyer_email(request):
         print(f"Erreur création email: {str(e)}")
         return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
     
-    # Construire la liste de destinataires
     if data['send_mode'] == 'direct':
         destinataires = [{
             'email': data['email_direct'],
@@ -438,10 +427,8 @@ def creer_envoyer_email(request):
         groupe = data.get('groupe', '')
         emails_selected = data.get('emails_selected', [])
         
-        # Récupérer tous les destinataires selon les filtres
         tous_destinataires = get_destinataires_segment(groupe, formations_ids, statuts, sources)
         
-        # APPLIQUER LE FILTRE DES EMAILS SÉLECTIONNÉS
         if emails_selected and len(emails_selected) > 0:
             destinataires = [d for d in tous_destinataires if d['email'] in emails_selected]
             print(f"Filtrage appliqué: {len(tous_destinataires)} -> {len(destinataires)} destinataires sélectionnés")
@@ -451,7 +438,6 @@ def creer_envoyer_email(request):
     
     print(f"Destinataires finaux: {len(destinataires)}")
     
-    # Envoyer les emails
     sent_count = envoyer_emails(marketing_email, destinataires, fichier=fichier)
     
     return Response({
@@ -499,15 +485,12 @@ def archiver_emails(request):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def supprimer_emails(request):
-    """Supprimer définitivement des emails"""
     serializer = ArchiveEmailSerializer(data=request.data)
     if not serializer.is_valid():
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     ids = serializer.validated_data['ids']
-    # Supprimer d'abord les destinataires liés
     DestinatairEmail.objects.filter(email_marketing_id__in=ids).delete()
-    # Puis supprimer les emails
     deleted, _ = MarketingEmail.objects.filter(id__in=ids).delete()
     return Response({'message': f'{deleted} email(s) supprimé(s).'})
 
