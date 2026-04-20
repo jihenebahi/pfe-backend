@@ -1,0 +1,23 @@
+from django.urls import path
+from . import views
+
+urlpatterns = [
+    # ── Auth ──────────────────────────────────────────────────────
+    path('me/',              views.me,              name='me'),
+    path('login/',           views.login,           name='login'),
+    path('logout/',          views.logout_view,     name='logout'),
+    path('change-password/', views.change_password, name='change_password'),
+
+    # ── Gestion des comptes (super_admin) ─────────────────────────
+    path('users/',                              views.list_users,         name='list_users'),
+    path('users/create/',                       views.create_user,        name='create_user'),
+    path('users/<int:user_id>/',               views.get_user_detail,    name='get_user_detail'),
+    path('users/<int:user_id>/update/',        views.update_user,        name='update_user'),       # ✅ NOUVEAU
+    path('users/<int:user_id>/toggle-status/', views.toggle_user_status, name='toggle_user_status'),
+    path('users/<int:user_id>/delete/',        views.delete_user,        name='delete_user'),
+
+    # ── Mot de passe oublié ───────────────────────────────────────
+    path('password-reset/request/', views.request_password_reset, name='password_reset_request'),
+    path('password-reset/verify/',  views.verify_reset_code,      name='password_reset_verify'),
+    path('password-reset/confirm/', views.reset_password,         name='password_reset_confirm'),
+]
