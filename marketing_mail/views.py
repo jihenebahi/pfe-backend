@@ -27,6 +27,18 @@ from formation.models import Formation
 from formation.serializers import FormationSerializer
 
 
+
+
+# 🔥 IMPORTS IA
+from .services.ai_service import generate_with_gemini
+from .services.prompt_builder import (
+    build_preview_prompt_segment,
+    build_preview_prompt_individual,
+    build_body_prompt_segment,
+    build_body_prompt_individual
+)
+
+
 def get_destinataires_segment(groupe, formations_ids, statuts, sources):
     """Récupère la liste des destinataires avec leurs informations complètes"""
     result = []
@@ -559,4 +571,78 @@ def debug_emails(request):
             'groupe': e.groupe,
             'nombre_destinataires': e.nombre_destinataires,
         })
+
     return Response(data)
+
+    return Response(data)
+
+
+
+
+
+
+
+
+# =========================================================
+# 🤖 GENERATE PREVIEW (IA)
+# =========================================================
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def generate_preview_ai(request):
+    try:
+        data = request.data
+        mode = data.get("mode", "segment")  # segment / individual
+
+        if mode == "segment":
+            prompt = build_preview_prompt_segment(data)
+        else:
+            prompt = build_preview_prompt_individual(data)
+
+        result = generate_with_gemini(prompt)
+
+        # 🔥 parsing JSON sécurisé
+        try:
+            parsed = json.loads(result)
+        except:
+            parsed = {"preview": [result]}
+
+        return Response(parsed)
+
+    except Exception as e:
+        return Response(
+            {"error": str(e)},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+# =========================================================
+# 🤖 GENERATE BODY (IA)
+# =========================================================
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def generate_body_ai(request):
+    try:
+        data = request.data
+        mode = data.get("mode", "segment")
+
+        if mode == "segment":
+            prompt = build_body_prompt_segment(data)
+        else:
+            prompt = build_body_prompt_individual(data)
+
+        result = generate_with_gemini(prompt)
+
+        # 🔥 parsing JSON sécurisé
+        try:
+            parsed = json.loads(result)
+        except:
+            parsed = {"body": result}
+
+        return Response(parsed)
+
+    except Exception as e:
+        return Response(
+            {"error": str(e)},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+

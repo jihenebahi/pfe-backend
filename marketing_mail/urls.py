@@ -3,6 +3,11 @@
 from django.urls import path
 from . import views
 
+
+from .views import generate_preview_ai, generate_body_ai
+
+
+
 urlpatterns = [
     # Liste de tous les emails (avec filtres)
     path('', views.liste_emails, name='marketing-mail-liste'),
@@ -33,4 +38,11 @@ urlpatterns = [
     
     # Debug
     path('debug/', views.debug_emails, name='marketing-mail-debug'),
+
+
+
+
+    path('ai/generate-preview/', generate_preview_ai),
+    path('ai/generate-body/', generate_body_ai),
+
 ]
